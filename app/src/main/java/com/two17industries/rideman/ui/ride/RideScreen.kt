@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,11 +54,14 @@ fun RideScreen(state: RideUiState, settings: RidemanSettings, onEndRide: () -> U
         pageCount = { PagerWrap.VIRTUAL_PAGES },
     )
 
+    val currentState = rememberUpdatedState(state)
+    val currentUnits = rememberUpdatedState(settings.units)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(state, settings.units) {
-                detectTapGestures(onDoubleTap = { speak(tts, state, settings.units) })
+            .pointerInput(Unit) {
+                detectTapGestures(onDoubleTap = { speak(tts, currentState.value, currentUnits.value) })
             }
     ) {
         Column(Modifier.fillMaxSize()) {

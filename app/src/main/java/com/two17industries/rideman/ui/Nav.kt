@@ -1,6 +1,7 @@
 package com.two17industries.rideman.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,12 +16,13 @@ fun RidemanNav(vm: RideViewModel, onRideActiveChanged: (Boolean) -> Unit) {
     var dest by remember { mutableStateOf(Dest.START) }
     var lastSummary by remember { mutableStateOf<RideSummary?>(null) }
 
+    LaunchedEffect(dest) { onRideActiveChanged(dest == Dest.RIDE) }
+
     val settings by vm.settings.collectAsState()
     val ui by vm.ui.collectAsState()
 
     when (dest) {
         Dest.START -> {
-            onRideActiveChanged(false)
             StartScreen(
                 onStartRide = { vm.startRide(); dest = Dest.RIDE },
                 onSettings = { dest = Dest.SETTINGS },
@@ -32,7 +34,6 @@ fun RidemanNav(vm: RideViewModel, onRideActiveChanged: (Boolean) -> Unit) {
             onDone = { dest = Dest.START },
         )
         Dest.RIDE -> {
-            onRideActiveChanged(true)
             com.two17industries.rideman.ui.ride.RideScreen(
                 state = ui,
                 settings = settings,
@@ -40,7 +41,6 @@ fun RidemanNav(vm: RideViewModel, onRideActiveChanged: (Boolean) -> Unit) {
             )
         }
         Dest.END -> {
-            onRideActiveChanged(false)
             EndScreen(
                 summary = lastSummary ?: vm.endRide(),
                 units = settings.units,

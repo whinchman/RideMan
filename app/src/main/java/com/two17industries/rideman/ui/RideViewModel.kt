@@ -13,6 +13,7 @@ import com.two17industries.rideman.data.SettingsStore
 import com.two17industries.rideman.location.LocationBus
 import com.two17industries.rideman.location.LocationForegroundService
 import com.two17industries.rideman.sensor.SensorRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -44,15 +45,18 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
     private var startMillis: Long = 0L
     private val track = mutableListOf<LocationSample>()
     private var lastSummary: RideSummary? = null
+    private val collectorJobs = mutableListOf<Job>()
 
     fun startRide() {
+        collectorJobs.forEach { it.cancel() }
+        collectorJobs.clear()
         startMillis = System.currentTimeMillis()
         tracker = RideTracker(startMillis)
         track.clear()
         LocationBus.reset()
         LocationForegroundService.start(getApplication())
-        collectLocation()
-        collectSensors()
+        collectorJobs += collectLocation()
+        collectorJobs += collectSensors()
     }
 
     private fun collectLocation() = viewModelScope.launch {
@@ -70,21 +74,23 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun collectSensors() {
+    private fun collectSensors(): List<Job> = listOf(
         viewModelScope.launch {
             sensors.headingDegrees().collect { deg ->
                 _ui.value = _ui.value.copy(headingDeg = deg)
             }
-        }
+        },
         viewModelScope.launch {
             sensors.altitudeMeters().collect { alt ->
                 _ui.value = _ui.value.copy(altitudeM = alt)
             }
-        }
-    }
+        },
+    )
 
     /** Stops tracking and returns the summary for the End screen. */
     fun endRide(): RideSummary {
+        collectorJobs.forEach { it.cancel() }
+        collectorJobs.clear()
         LocationForegroundService.stop(getApplication())
         val summary = tracker?.summarize(System.currentTimeMillis())
             ?: RideSummary(startMillis, startMillis, 0L, 0.0, 0f, 0f)

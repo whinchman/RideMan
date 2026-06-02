@@ -42,18 +42,19 @@ class LocationForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
-        requestUpdates()
-        return START_STICKY
+        return if (requestUpdates()) START_STICKY else START_NOT_STICKY
     }
 
-    private fun requestUpdates() {
+    private fun requestUpdates(): Boolean {
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
             .setMinUpdateIntervalMillis(500L)
             .build()
-        try {
+        return try {
             client.requestLocationUpdates(request, callback, mainLooper)
+            true
         } catch (e: SecurityException) {
             stopSelf()
+            false
         }
     }
 

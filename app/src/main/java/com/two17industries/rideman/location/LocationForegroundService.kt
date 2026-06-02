@@ -1,0 +1,92 @@
+package com.two17industries.rideman.location
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
+import android.os.IBinder
+import androidx.core.app.NotificationCompat
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.two17industries.rideman.R
+import com.two17industries.rideman.core.LocationSample
+
+class LocationForegroundService : Service() {
+
+    private val client by lazy { LocationServices.getFusedLocationProviderClient(this) }
+
+    private val callback = object : LocationCallback() {
+        override fun onLocationResult(result: LocationResult) {
+            val loc = result.lastLocation ?: return
+            LocationBus.publish(
+                LocationSample(
+                    epochMillis = loc.time,
+                    lat = loc.latitude,
+                    lng = loc.longitude,
+                    speedMps = if (loc.hasSpeed()) loc.speed else 0f,
+                    headingDeg = if (loc.hasBearing()) loc.bearing else 0f,
+                    gpsAltitudeM = if (loc.hasAltitude()) loc.altitude else null,
+                )
+            )
+        }
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+        requestUpdates()
+        return START_STICKY
+    }
+
+    private fun requestUpdates() {
+        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
+            .setMinUpdateIntervalMillis(500L)
+            .build()
+        try {
+            client.requestLocationUpdates(request, callback, mainLooper)
+        } catch (e: SecurityException) {
+            stopSelf()
+        }
+    }
+
+    override fun onDestroy() {
+        client.removeLocationUpdates(callback)
+        super.onDestroy()
+    }
+
+    private fun buildNotification(): Notification {
+        val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            mgr.createNotificationChannel(
+                NotificationChannel(CHANNEL, "Ride tracking", NotificationManager.IMPORTANCE_LOW)
+            )
+        }
+        return NotificationCompat.Builder(this, CHANNEL)
+            .setContentTitle("Rideman")
+            .setContentText("Recording your ride")
+            .setSmallIcon(R.drawable.ic_ride)
+            .setOngoing(true)
+            .build()
+    }
+
+    companion object {
+        private const val CHANNEL = "ride_tracking"
+        private const val NOTIF_ID = 1001
+
+        fun start(context: Context) {
+            val intent = Intent(context, LocationForegroundService::class.java)
+            context.startForegroundService(intent)
+        }
+        fun stop(context: Context) {
+            context.stopService(Intent(context, LocationForegroundService::class.java))
+        }
+    }
+}

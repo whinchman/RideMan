@@ -5,6 +5,10 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+val gitCommit: String = providers.exec {
+    commandLine("git", "rev-parse", "--short", "HEAD")
+}.standardOutput.asText.map { it.trim() }.getOrElse("dev")
+
 android {
     namespace = "com.two17industries.rideman"
     compileSdk = 36
@@ -20,11 +24,11 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "GIT_COMMIT", "\"dev\"")
+            buildConfigField("String", "GIT_COMMIT", "\"$gitCommit\"")
         }
         release {
             isMinifyEnabled = false
-            buildConfigField("String", "GIT_COMMIT", "\"dev\"")
+            buildConfigField("String", "GIT_COMMIT", "\"$gitCommit\"")
         }
     }
     compileOptions {

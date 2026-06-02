@@ -38,8 +38,9 @@ It is a personal, sideloaded app — not a Play Store release.
 - **Build/deploy:** Gradle wrapper. `./gradlew assembleDebug`, then
   `adb install -r app/build/outputs/apk/debug/app-debug.apk`. Developed in VS Code;
   Android Studio not required.
-- **Package / app name:** `com.hinchman.bikehelper`, app label "Bike Helper"
-  (final names confirmable at scaffold time).
+- **Package / app name:** `com.two17industries.rideman` (applicationId + namespace),
+  app label "Rideman". The `two17industries` segment is Will's 217industries namespace,
+  spelled out because a package segment cannot start with a digit.
 
 ## Data model
 

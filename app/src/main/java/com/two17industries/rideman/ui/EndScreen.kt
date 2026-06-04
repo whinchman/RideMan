@@ -80,8 +80,10 @@ private fun PlanResult(
 ) {
     val met = PlanGrading.isMet(planRide, summary.distanceM, tolerancePercent)
     val amber = Color(0xFFFFCF3A)
-    val actualMi = Units.distance(summary.distanceM, UnitSystem.AMERICAN)
-    val shortByMi = planRide.targetMiles - actualMi
+    val label = Units.distanceLabel(units)
+    val targetDisplay = Units.distance(planRide.targetMiles * PlanGrading.METERS_PER_MILE, units)
+    val actualDisplay = Units.distance(summary.distanceM, units)
+    val shortBy = targetDisplay - actualDisplay
 
     Text(
         "Week ${planRide.week} · Ride ${planRide.slot} — ${planRide.kind}",
@@ -92,7 +94,7 @@ private fun PlanResult(
     val (bannerText, bannerColor) = if (met)
         "✓ TARGET MET · SLOT COMPLETE" to accent
     else
-        "LOGGED · ${String.format(Locale.US, "%.1f", abs(shortByMi))} mi SHORT — SLOT STAYS OPEN" to amber
+        "LOGGED · ${String.format(Locale.US, "%.2f", abs(shortBy))} $label SHORT — SLOT STAYS OPEN" to amber
 
     Box(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(bannerColor.copy(alpha = if (met) 1f else 0.18f)).padding(12.dp),
@@ -109,8 +111,8 @@ private fun PlanResult(
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text("DISTANCE", color = accent.copy(alpha = 0.6f), style = MaterialTheme.typography.labelLarge)
         Text(
-            "target ${formatMiles(planRide.targetMiles)} mi  →  " +
-                "${String.format(Locale.US, "%.2f", Units.distance(summary.distanceM, units))} ${Units.distanceLabel(units)}",
+            "target ${String.format(Locale.US, "%.1f", targetDisplay)} $label  →  " +
+                "${String.format(Locale.US, "%.2f", actualDisplay)} $label",
             color = if (met) accent else amber,
             style = MaterialTheme.typography.titleLarge,
         )

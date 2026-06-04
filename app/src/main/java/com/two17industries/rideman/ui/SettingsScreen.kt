@@ -40,17 +40,31 @@ import androidx.compose.ui.unit.sp
 import com.two17industries.rideman.core.Cadence
 import com.two17industries.rideman.core.CadenceMode
 import com.two17industries.rideman.core.UnitSystem
+import com.two17industries.rideman.data.RideScreen
 import com.two17industries.rideman.data.RidemanSettings
 import com.two17industries.rideman.data.ThemeChoice
 import com.two17industries.rideman.ui.theme.Background
 import com.two17industries.rideman.ui.theme.accentFor
 
 @Composable
-fun SettingsScreen(current: RidemanSettings, onSave: (RidemanSettings) -> Unit, onDone: () -> Unit) {
+fun SettingsScreen(
+    current: RidemanSettings,
+    onSave: (RidemanSettings) -> Unit,
+    onDone: () -> Unit,
+    onCancel: () -> Unit,
+) {
     var units by remember { mutableStateOf(current.units) }
     var cadenceMode by remember { mutableStateOf(current.cadenceMode) }
     var targetRpm by remember { mutableIntStateOf(current.targetRpm) }
     var theme by remember { mutableStateOf(current.theme) }
+    // Ordered list of ALL ride screens; the Boolean is "enabled". Enabled ones keep
+    // their saved order first, then the rest (disabled) in their default order.
+    var screenItems by remember {
+        mutableStateOf(
+            current.screenOrder.map { it to true } +
+                (RideScreen.entries - current.screenOrder.toSet()).map { it to false }
+        )
+    }
 
     // Preview the picked theme live so the whole screen recolors as you choose.
     val accent = accentFor(theme)
@@ -64,13 +78,28 @@ fun SettingsScreen(current: RidemanSettings, onSave: (RidemanSettings) -> Unit, 
             .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(28.dp),
     ) {
-        Text(
-            "SETTINGS",
-            color = accent,
-            fontSize = 34.sp,
-            fontWeight = FontWeight.Black,
-            letterSpacing = 1.sp,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                "SETTINGS",
+                color = accent,
+                fontSize = 34.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.sp,
+            )
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .border(2.dp, accent, RoundedCornerShape(50))
+                    .clickable(onClick = onCancel)
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+            ) {
+                Text("CANCEL", color = accent, fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            }
+        }
 
         Section("UNITS", accent) {
             PillRow {
@@ -114,11 +143,51 @@ fun SettingsScreen(current: RidemanSettings, onSave: (RidemanSettings) -> Unit, 
             }
         }
 
+        Section("RIDE SCREENS", accent) {
+            Text(
+                "Tap to enable · arrows reorder",
+                color = accent.copy(alpha = 0.6f),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            screenItems.forEachIndexed { index, (screen, enabled) ->
+                OrderRow(
+                    name = screenName(screen),
+                    enabled = enabled,
+                    isFirst = index == 0,
+                    isLast = index == screenItems.lastIndex,
+                    accent = accent,
+                    onToggle = {
+                        screenItems = screenItems.toMutableList().also { it[index] = screen to !enabled }
+                    },
+                    onUp = {
+                        if (index > 0) screenItems = screenItems.toMutableList().also {
+                            val tmp = it[index - 1]; it[index - 1] = it[index]; it[index] = tmp
+                        }
+                    },
+                    onDown = {
+                        if (index < screenItems.lastIndex) screenItems = screenItems.toMutableList().also {
+                            val tmp = it[index + 1]; it[index + 1] = it[index]; it[index] = tmp
+                        }
+                    },
+                )
+            }
+        }
+
         Spacer(Modifier.height(8.dp))
 
         Button(
             onClick = {
-                onSave(current.copy(units = units, cadenceMode = cadenceMode, targetRpm = targetRpm, theme = theme))
+                val order = screenItems.filter { it.second }.map { it.first }
+                onSave(
+                    current.copy(
+                        units = units,
+                        cadenceMode = cadenceMode,
+                        targetRpm = targetRpm,
+                        theme = theme,
+                        screenOrder = order.ifEmpty { RideScreen.entries.toList() },
+                    )
+                )
                 onDone()
             },
             colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Background),
@@ -216,6 +285,68 @@ private fun StepButton(label: String, accent: Color, onClick: () -> Unit) {
     ) {
         Text(label, color = Background, fontSize = 32.sp, fontWeight = FontWeight.Black)
     }
+}
+
+@Composable
+private fun OrderRow(
+    name: String,
+    enabled: Boolean,
+    isFirst: Boolean,
+    isLast: Boolean,
+    accent: Color,
+    onToggle: () -> Unit,
+    onUp: () -> Unit,
+    onDown: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(if (enabled) accent else Color.Transparent)
+                .border(2.dp, accent, RoundedCornerShape(10.dp))
+                .clickable(onClick = onToggle),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (enabled) Text("✓", color = Background, fontSize = 22.sp, fontWeight = FontWeight.Black)
+        }
+        Text(
+            name,
+            modifier = Modifier.weight(1f),
+            color = if (enabled) accent else accent.copy(alpha = 0.4f),
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+        )
+        ArrowButton("▲", enabled = !isFirst, accent = accent, onClick = onUp)
+        ArrowButton("▼", enabled = !isLast, accent = accent, onClick = onDown)
+    }
+}
+
+@Composable
+private fun ArrowButton(glyph: String, enabled: Boolean, accent: Color, onClick: () -> Unit) {
+    val tint = if (enabled) accent else accent.copy(alpha = 0.25f)
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .border(2.dp, tint, RoundedCornerShape(10.dp))
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(glyph, color = tint, fontSize = 18.sp, fontWeight = FontWeight.Black)
+    }
+}
+
+private fun screenName(screen: RideScreen): String = when (screen) {
+    RideScreen.SPEED -> "Speed"
+    RideScreen.ODOMETER -> "Odometer"
+    RideScreen.COMPASS -> "Compass"
+    RideScreen.ALTITUDE -> "Altitude"
+    RideScreen.CADENCE -> "Cadence"
 }
 
 private fun themeName(choice: ThemeChoice): String = when (choice) {

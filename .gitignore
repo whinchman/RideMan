@@ -1,3 +1,14 @@
 .env
 
 .superpowers/
+
+# Android / Gradle
+.gradle/
+build/
+/local.properties
+*.apk
+*.aab
+*.keystore
+.idea/
+.kotlin/
+captures/

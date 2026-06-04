@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -49,8 +50,11 @@ fun StartScreen(
         Button(
             onClick = onPlanRide,
             enabled = planAvailable,
-            colors = ButtonDefaults.buttonColors(containerColor = accent),
-            modifier = Modifier.fillMaxWidth().height(96.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = accent,
+                disabledContainerColor = accent.copy(alpha = 0.20f),
+            ),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("PLAN RIDE", style = MaterialTheme.typography.titleLarge)

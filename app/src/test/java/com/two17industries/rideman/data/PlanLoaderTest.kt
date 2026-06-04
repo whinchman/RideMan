@@ -2,6 +2,7 @@ package com.two17industries.rideman.data
 
 import com.two17industries.rideman.core.Pace
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -44,6 +45,7 @@ class PlanLoaderTest {
         assertEquals(3.0, b.targetMiles, 0.0)
         assertEquals(Pace.STEADY, b.pace)
         assertTrue(b.longRide)
+        assertFalse(plan.byId.getValue("w1A").recoveryWeek)
     }
 
     @Test fun real_asset_has_42_rides_with_unique_ids() {
@@ -59,5 +61,13 @@ class PlanLoaderTest {
         val goal = plan.byId.getValue("w14C")
         assertEquals(10.0, goal.targetMiles, 0.0)
         assertTrue(goal.longRide)
+    }
+
+    @Test fun real_asset_marks_weeks_4_and_8_as_recovery() {
+        val json = File("src/main/assets/plan.json").readText()
+        val plan = parsePlanJson(json)
+        assertTrue(plan.byId.getValue("w4A").recoveryWeek)
+        assertTrue(plan.byId.getValue("w8B").recoveryWeek)
+        assertFalse(plan.byId.getValue("w3A").recoveryWeek)
     }
 }

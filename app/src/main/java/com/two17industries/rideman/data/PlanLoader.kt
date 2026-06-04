@@ -5,6 +5,7 @@ import com.two17industries.rideman.core.Pace
 import com.two17industries.rideman.core.Plan
 import com.two17industries.rideman.core.PlanRide
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 
 @Serializable
@@ -42,7 +43,7 @@ private val json = Json { ignoreUnknownKeys = true }
 
 /** Parse plan JSON text into the domain [Plan]. Throws on malformed input. */
 fun parsePlanJson(text: String): Plan {
-    val dto = json.decodeFromString(PlanDto.serializer(), text)
+    val dto = json.decodeFromString<PlanDto>(text)
     val rides = dto.phases.flatMap { phase ->
         phase.weeks.flatMap { week ->
             week.rides.map { ride ->

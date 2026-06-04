@@ -2,10 +2,19 @@ package com.two17industries.rideman.data
 
 import com.two17industries.rideman.core.LocationSample
 import com.two17industries.rideman.core.RideSummary
+import kotlinx.coroutines.flow.Flow
 
 class RideRepository(private val dao: RideDao) {
 
-    suspend fun saveRide(summary: RideSummary, track: List<LocationSample>): Long {
+    fun allRides(): Flow<List<RideEntity>> = dao.getAllRides()
+
+    fun planTaggedRides(): Flow<List<RideEntity>> = dao.getPlanTaggedRides()
+
+    suspend fun saveRide(
+        summary: RideSummary,
+        track: List<LocationSample>,
+        planRideId: String? = null,
+    ): Long {
         val ride = RideEntity(
             startedAt = summary.startedAtMillis,
             endedAt = summary.endedAtMillis,
@@ -13,6 +22,7 @@ class RideRepository(private val dao: RideDao) {
             distanceM = summary.distanceM,
             maxSpeedMps = summary.maxSpeedMps,
             avgSpeedMps = summary.avgSpeedMps,
+            planRideId = planRideId,
         )
         val points = track.map {
             TrackPointEntity(

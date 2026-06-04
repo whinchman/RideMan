@@ -1,6 +1,7 @@
 package com.two17industries.rideman.ui
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.two17industries.rideman.core.LocationSample
@@ -10,6 +11,11 @@ import com.two17industries.rideman.data.RidemanDatabase
 import com.two17industries.rideman.data.RidemanSettings
 import com.two17industries.rideman.data.RideRepository
 import com.two17industries.rideman.data.SettingsStore
+import com.two17industries.rideman.core.Plan
+import com.two17industries.rideman.core.PlanAttempt
+import com.two17industries.rideman.core.PlanProgress
+import com.two17industries.rideman.data.PlanLoader
+import com.two17industries.rideman.data.RideEntity
 import com.two17industries.rideman.location.LocationBus
 import com.two17industries.rideman.location.LocationForegroundService
 import com.two17industries.rideman.sensor.SensorRepository
@@ -18,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -34,6 +41,30 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
     private val settingsStore = SettingsStore(app)
     private val sensors = SensorRepository(app)
     private val repo = RideRepository(RidemanDatabase.get(app).rideDao())
+
+    /** Parsed once at startup; null if the asset is missing/malformed (plan features disable). */
+    val plan: Plan? = runCatching { PlanLoader.load(app) }
+        .onFailure { Log.w("RideViewModel", "plan.json failed to load; plan features disabled", it) }
+        .getOrNull()
+
+    /** All rides, newest first, for the History screen. */
+    val allRides: StateFlow<List<RideEntity>> =
+        repo.allRides().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Derived plan progress, or null if there is no loaded plan. */
+    val progress: StateFlow<PlanProgress?> =
+        repo.planTaggedRides()
+            .map { rides ->
+                plan?.let { p ->
+                    PlanProgress(p, rides.mapNotNull { r ->
+                        r.planRideId?.let { PlanAttempt(it, r.distanceM) }
+                    })
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Plan slot for the in-progress ride, or null for a free ride. */
+    private var activePlanRideId: String? = null
 
     val settings: StateFlow<RidemanSettings> =
         settingsStore.settings.stateIn(viewModelScope, SharingStarted.Eagerly, RidemanSettings())
@@ -56,7 +87,8 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
     private var altitudeOffset: Double = 0.0
     private var altitudeOffsetInit = false
 
-    fun startRide() {
+    fun startRide(planRideId: String? = null) {
+        activePlanRideId = planRideId
         collectorJobs.forEach { it.cancel() }
         collectorJobs.clear()
         startMillis = System.currentTimeMillis()
@@ -139,7 +171,7 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
     fun persistLastRide() {
         val summary = lastSummary ?: return
         val snapshot = track.toList()
-        viewModelScope.launch { repo.saveRide(summary, snapshot) }
+        viewModelScope.launch { repo.saveRide(summary, snapshot, activePlanRideId) }
     }
 
     fun saveSettings(updated: RidemanSettings) {

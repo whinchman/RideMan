@@ -12,4 +12,6 @@ data class RideEntity(
     val distanceM: Double,
     val maxSpeedMps: Float,
     val avgSpeedMps: Float,
+    /** Plan slot this ride was tagged to (e.g. "w3B"), or null for a free ride. */
+    val planRideId: String? = null,
 )

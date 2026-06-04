@@ -20,10 +20,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.two17industries.rideman.core.Plan
@@ -40,7 +42,7 @@ fun PlanPickerScreen(
 ) {
     val accent = LocalAccent.current
     val defaultExpanded = progress?.nextIncomplete()?.id ?: plan.rides.firstOrNull()?.id
-    var expandedId by remember { mutableStateOf(defaultExpanded) }
+    var expandedId by rememberSaveable { mutableStateOf(defaultExpanded) }
 
     // Build the ordered display list: a phase header appears before its first ride,
     // a week header before that week's first ride.
@@ -52,23 +54,18 @@ fun PlanPickerScreen(
             modifier = Modifier.clickable(onClick = onBack).padding(bottom = 12.dp),
         )
 
+        val listItems = remember(plan) { buildPlanListItems(plan) }
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            var lastPhase = -1
-            var lastWeek = -1
-            items(plan.rides, key = { it.id }) { ride ->
-                if (ride.phaseNumber != lastPhase) {
-                    lastPhase = ride.phaseNumber
-                    PhaseHeader(ride.phaseNumber, ride.phaseName, accent)
-                }
-                if (ride.week != lastWeek) {
-                    lastWeek = ride.week
-                    WeekHeader(ride.week, ride.recoveryWeek)
-                }
-                val complete = progress?.isComplete(ride.id) == true
-                if (ride.id == expandedId) {
-                    ExpandedRow(ride, complete, accent)
-                } else {
-                    CollapsedRow(ride, complete, accent) { expandedId = ride.id }
+            items(listItems, key = { it.key }) { item ->
+                when (item) {
+                    is PlanListItem.PhaseHeaderItem -> PhaseHeader(item.number, item.name, accent)
+                    is PlanListItem.WeekHeaderItem -> WeekHeader(item.week, item.recovery)
+                    is PlanListItem.RideItem -> {
+                        val ride = item.ride
+                        val complete = progress?.isComplete(ride.id) == true
+                        if (ride.id == expandedId) ExpandedRow(ride, complete, accent)
+                        else CollapsedRow(ride, complete, accent) { expandedId = ride.id }
+                    }
                 }
             }
         }
@@ -83,7 +80,7 @@ fun PlanPickerScreen(
 }
 
 @Composable
-private fun PhaseHeader(number: Int, name: String, accent: androidx.compose.ui.graphics.Color) {
+private fun PhaseHeader(number: Int, name: String, accent: Color) {
     Text(
         "PHASE $number · ${name.uppercase()}",
         color = accent.copy(alpha = 0.6f),
@@ -106,7 +103,7 @@ private fun WeekHeader(week: Int, recovery: Boolean) {
 private fun CollapsedRow(
     ride: PlanRide,
     complete: Boolean,
-    accent: androidx.compose.ui.graphics.Color,
+    accent: Color,
     onClick: () -> Unit,
 ) {
     val labelColor = if (complete) accent.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSurface
@@ -133,7 +130,7 @@ private fun CollapsedRow(
 private fun ExpandedRow(
     ride: PlanRide,
     complete: Boolean,
-    accent: androidx.compose.ui.graphics.Color,
+    accent: Color,
 ) {
     Box(
         Modifier
@@ -176,4 +173,36 @@ private fun ExpandedRow(
             }
         }
     }
+}
+
+private sealed interface PlanListItem {
+    val key: String
+    data class PhaseHeaderItem(val number: Int, val name: String) : PlanListItem {
+        override val key get() = "phase-$number"
+    }
+    data class WeekHeaderItem(val week: Int, val recovery: Boolean) : PlanListItem {
+        override val key get() = "week-$week"
+    }
+    data class RideItem(val ride: PlanRide) : PlanListItem {
+        override val key get() = ride.id
+    }
+}
+
+/** Flatten the plan into a stable, ordered list of headers + ride rows (single sequential pass). */
+private fun buildPlanListItems(plan: Plan): List<PlanListItem> {
+    val out = mutableListOf<PlanListItem>()
+    var lastPhase = -1
+    var lastWeek = -1
+    for (ride in plan.rides) {
+        if (ride.phaseNumber != lastPhase) {
+            lastPhase = ride.phaseNumber
+            out += PlanListItem.PhaseHeaderItem(ride.phaseNumber, ride.phaseName)
+        }
+        if (ride.week != lastWeek) {
+            lastWeek = ride.week
+            out += PlanListItem.WeekHeaderItem(ride.week, ride.recoveryWeek)
+        }
+        out += PlanListItem.RideItem(ride)
+    }
+    return out
 }

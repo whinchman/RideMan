@@ -1,0 +1,100 @@
+{
+  "title": "Couch-to-10-Miles Cycling Plan",
+  "tolerancePercent": 5,
+  "phases": [
+    {
+      "number": 1,
+      "name": "Build the base",
+      "weeks": [
+        { "week": 1, "recovery": false, "rides": [
+          { "slot": "A", "kind": "easy", "targetMiles": 2.0, "pace": "easy", "longRide": false, "guidance": "Easy spin, high cadence." },
+          { "slot": "B", "kind": "endurance", "targetMiles": 3.0, "pace": "easy", "longRide": true, "guidance": "Your longer endurance ride. Pace doesn't matter yet." },
+          { "slot": "C", "kind": "quality", "targetMiles": 2.5, "pace": "easy", "longRide": false, "guidance": "Easy spin." }
+        ]},
+        { "week": 2, "recovery": false, "rides": [
+          { "slot": "A", "kind": "easy", "targetMiles": 2.5, "pace": "easy", "longRide": false, "guidance": "Easy spin, high cadence." },
+          { "slot": "B", "kind": "endurance", "targetMiles": 4.0, "pace": "easy", "longRide": true, "guidance": "Your longer endurance ride." },
+          { "slot": "C", "kind": "quality", "targetMiles": 3.0, "pace": "easy", "longRide": false, "guidance": "Easy spin." }
+        ]},
+        { "week": 3, "recovery": false, "rides": [
+          { "slot": "A", "kind": "easy", "targetMiles": 3.0, "pace": "easy", "longRide": false, "guidance": "Easy spin, high cadence." },
+          { "slot": "B", "kind": "endurance", "targetMiles": 5.0, "pace": "easy", "longRide": true, "guidance": "Your longer endurance ride." },
+          { "slot": "C", "kind": "quality", "targetMiles": 3.0, "pace": "easy", "longRide": false, "guidance": "Incl. 3 x 20-sec light pickups (spin faster in an easy gear)." }
+        ]},
+        { "week": 4, "recovery": true, "rides": [
+          { "slot": "A", "kind": "easy", "targetMiles": 2.0, "pace": "easy", "longRide": false, "guidance": "Recovery week. Very easy." },
+          { "slot": "B", "kind": "endurance", "targetMiles": 4.0, "pace": "easy", "longRide": true, "guidance": "Recovery week. Easy." },
+          { "slot": "C", "kind": "quality", "targetMiles": 3.0, "pace": "easy", "longRide": false, "guidance": "Recovery week. Easy." }
+        ]}
+      ]
+    },
+    {
+      "number": 2,
+      "name": "Build the distance",
+      "weeks": [
+        { "week": 5, "recovery": false, "rides": [
+          { "slot": "A", "kind": "easy", "targetMiles": 3.0, "pace": "easy", "longRide": false, "guidance": "Easy spin, high cadence." },
+          { "slot": "B", "kind": "endurance", "targetMiles": 6.0, "pace": "easy", "longRide": true, "guidance": "Your longer endurance ride." },
+          { "slot": "C", "kind": "quality", "targetMiles": 3.5, "pace": "easy", "longRide": false, "guidance": "Incl. 4 x 20-sec pickups." }
+        ]},
+        { "week": 6, "recovery": false, "rides": [
+          { "slot": "A", "kind": "easy", "targetMiles": 3.0, "pace": "easy", "longRide": false, "guidance": "Easy spin, high cadence." },
+          { "slot": "B", "kind": "endurance", "targetMiles": 7.0, "pace": "easy", "longRide": true, "guidance": "Your longer endurance ride." },
+          { "slot": "C", "kind": "quality", "targetMiles": 4.0, "pace": "steady", "longRide": false, "guidance": "Incl. 2 x 3-min steady efforts." }
+        ]},
+        { "week": 7, "recovery": false, "rides": [
+          { "slot": "A", "kind": "easy", "targetMiles": 3.0, "pace": "easy", "longRide": false, "guidance": "Easy spin, high cadence." },
+          { "slot": "B", "kind": "endurance", "targetMiles": 8.0, "pace": "easy", "longRide": true, "guidance": "Your longer endurance ride." },
+          { "slot": "C", "kind": "quality", "targetMiles": 4.0, "pace": "steady", "longRide": false, "guidance": "Incl. 3 x 3-min steady efforts." }
+        ]},
+        { "week": 8, "recovery": true, "rides": [
+          { "slot": "A", "kind": "easy", "targetMiles": 3.0, "pace": "easy", "longRide": false, "guidance": "Recovery week. Easy." },
+          { "slot": "B", "kind": "endurance", "targetMiles": 5.0, "pace": "easy", "longRide": true, "guidance": "Recovery week. Easy." },
+          { "slot": "C", "kind": "quality", "targetMiles": 4.0, "pace": "easy", "longRide": false, "guidance": "Recovery week. Easy." }
+        ]}
+      ]
+    },
+    {
+      "number": 3,
+      "name": "Reach 10 miles",
+      "weeks": [
+        { "week": 9, "recovery": false, "rides": [
+          { "slot": "A", "kind": "easy", "targetMiles": 3.0, "pace": "easy", "longRide": false, "guidance": "Easy spin, high cadence." },
+          { "slot": "B", "kind": "endurance", "targetMiles": 9.0, "pace": "easy", "longRide": true, "guidance": "Your longer endurance ride. Just finish comfortably." },
+          { "slot": "C", "kind": "quality", "targetMiles": 5.0, "pace": "steady", "longRide": false, "guidance": "Incl. 3 x 4-min steady efforts." }
+        ]},
+        { "week": 10, "recovery": false, "rides": [
+          { "slot": "A", "kind": "easy", "targetMiles": 4.0, "pace": "easy", "longRide": false, "guidance": "Easy spin, high cadence." },
+          { "slot": "B", "kind": "endurance", "targetMiles": 10.0, "pace": "easy", "longRide": true, "guidance": "First 10-miler! Pace doesn't matter, just finish." },
+          { "slot": "C", "kind": "quality", "targetMiles": 5.0, "pace": "steady", "longRide": false, "guidance": "Incl. 4 x 4-min steady efforts." }
+        ]}
+      ]
+    },
+    {
+      "number": 4,
+      "name": "Build the pace",
+      "weeks": [
+        { "week": 11, "recovery": false, "rides": [
+          { "slot": "A", "kind": "easy", "targetMiles": 4.0, "pace": "easy", "longRide": false, "guidance": "Easy spin, high cadence." },
+          { "slot": "B", "kind": "endurance", "targetMiles": 8.0, "pace": "steady", "longRide": true, "guidance": "Middle 4 mi at steady." },
+          { "slot": "C", "kind": "quality", "targetMiles": 5.0, "pace": "brisk", "longRide": false, "guidance": "5 x 3-min brisk (15+ mph)." }
+        ]},
+        { "week": 12, "recovery": false, "rides": [
+          { "slot": "A", "kind": "easy", "targetMiles": 4.0, "pace": "easy", "longRide": false, "guidance": "Easy spin, high cadence." },
+          { "slot": "B", "kind": "endurance", "targetMiles": 10.0, "pace": "steady", "longRide": true, "guidance": "Hold ~14 mph avg." },
+          { "slot": "C", "kind": "quality", "targetMiles": 5.0, "pace": "brisk", "longRide": false, "guidance": "4 x 4-min brisk." }
+        ]},
+        { "week": 13, "recovery": false, "rides": [
+          { "slot": "A", "kind": "easy", "targetMiles": 4.0, "pace": "easy", "longRide": false, "guidance": "Easy spin, high cadence." },
+          { "slot": "B", "kind": "endurance", "targetMiles": 10.0, "pace": "steady", "longRide": true, "guidance": "Push avg toward 15 mph." },
+          { "slot": "C", "kind": "quality", "targetMiles": 5.0, "pace": "brisk", "longRide": false, "guidance": "Short sharp intervals." }
+        ]},
+        { "week": 14, "recovery": false, "rides": [
+          { "slot": "A", "kind": "easy", "targetMiles": 4.0, "pace": "easy", "longRide": false, "guidance": "Very easy." },
+          { "slot": "B", "kind": "endurance", "targetMiles": 3.0, "pace": "easy", "longRide": false, "guidance": "Rest day, or an easy 3 mi spin." },
+          { "slot": "C", "kind": "quality", "targetMiles": 10.0, "pace": "brisk", "longRide": true, "guidance": "GOAL RIDE: 10 mi at 15 mph (~40 min)." }
+        ]}
+      ]
+    }
+  ]
+}

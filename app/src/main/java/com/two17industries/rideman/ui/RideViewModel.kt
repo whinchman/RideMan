@@ -1,6 +1,7 @@
 package com.two17industries.rideman.ui
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.two17industries.rideman.core.LocationSample
@@ -42,7 +43,9 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = RideRepository(RidemanDatabase.get(app).rideDao())
 
     /** Parsed once at startup; null if the asset is missing/malformed (plan features disable). */
-    val plan: Plan? = runCatching { PlanLoader.load(app) }.getOrNull()
+    val plan: Plan? = runCatching { PlanLoader.load(app) }
+        .onFailure { Log.w("RideViewModel", "plan.json failed to load; plan features disabled", it) }
+        .getOrNull()
 
     /** All rides, newest first, for the History screen. */
     val allRides: StateFlow<List<RideEntity>> =

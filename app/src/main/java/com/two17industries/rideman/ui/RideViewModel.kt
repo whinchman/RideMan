@@ -47,12 +47,25 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
     private var lastSummary: RideSummary? = null
     private val collectorJobs = mutableListOf<Job>()
 
+    // Altitude fusion: the barometer gives responsive *relative* altitude (standard
+    // atmosphere), GPS gives a noisy but *absolute* reference. We learn the offset
+    // between them from GPS fixes and display barometric altitude + offset, so the
+    // number is both stable and anchored to true elevation.
+    private var baroAltitudeRaw: Double? = null
+    private var lastGpsAltitude: Double? = null
+    private var altitudeOffset: Double = 0.0
+    private var altitudeOffsetInit = false
+
     fun startRide() {
         collectorJobs.forEach { it.cancel() }
         collectorJobs.clear()
         startMillis = System.currentTimeMillis()
         tracker = RideTracker(startMillis)
         track.clear()
+        baroAltitudeRaw = null
+        lastGpsAltitude = null
+        altitudeOffset = 0.0
+        altitudeOffsetInit = false
         LocationBus.reset()
         LocationForegroundService.start(getApplication())
         collectorJobs += collectLocation()
@@ -65,10 +78,24 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
             val t = tracker ?: return@collect
             t.add(sample)
             track.add(sample)
+            sample.gpsAltitudeM?.let { gpsAlt ->
+                lastGpsAltitude = gpsAlt
+                baroAltitudeRaw?.let { baro ->
+                    val newOffset = gpsAlt - baro
+                    altitudeOffset = if (!altitudeOffsetInit) {
+                        altitudeOffsetInit = true
+                        newOffset
+                    } else {
+                        // Low-pass so a single bad GPS altitude can't jerk the reading.
+                        altitudeOffset * 0.8 + newOffset * 0.2
+                    }
+                }
+            }
             _ui.value = _ui.value.copy(
                 speedMps = sample.speedMps,
                 distanceM = t.distanceM,
                 headingDeg = sample.headingDeg,
+                altitudeM = displayedAltitude(),
                 elapsedMs = System.currentTimeMillis() - startMillis,
             )
         }
@@ -82,10 +109,21 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
         },
         viewModelScope.launch {
             sensors.altitudeMeters().collect { alt ->
-                _ui.value = _ui.value.copy(altitudeM = alt)
+                baroAltitudeRaw = alt
+                _ui.value = _ui.value.copy(altitudeM = displayedAltitude())
             }
         },
     )
+
+    /** Best available altitude: GPS-anchored barometer, raw barometer, or GPS alone. */
+    private fun displayedAltitude(): Double {
+        val baro = baroAltitudeRaw
+        return when {
+            baro != null && altitudeOffsetInit -> baro + altitudeOffset
+            baro != null -> baro
+            else -> lastGpsAltitude ?: 0.0
+        }
+    }
 
     /** Stops tracking and returns the summary for the End screen. */
     fun endRide(): RideSummary {

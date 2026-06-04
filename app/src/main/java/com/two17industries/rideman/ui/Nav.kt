@@ -1,5 +1,6 @@
 package com.two17industries.rideman.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -28,12 +29,19 @@ fun RidemanNav(vm: RideViewModel, onRideActiveChanged: (Boolean) -> Unit) {
                 onSettings = { dest = Dest.SETTINGS },
             )
         }
-        Dest.SETTINGS -> SettingsScreen(
-            current = settings,
-            onSave = { vm.saveSettings(it) },
-            onDone = { dest = Dest.START },
-        )
+        Dest.SETTINGS -> {
+            // Hardware back = cancel (discard edits) and return to Start.
+            BackHandler { dest = Dest.START }
+            SettingsScreen(
+                current = settings,
+                onSave = { vm.saveSettings(it) },
+                onDone = { dest = Dest.START },
+                onCancel = { dest = Dest.START },
+            )
+        }
         Dest.RIDE -> {
+            // Hardware back ends the ride rather than dropping out of the app.
+            BackHandler { lastSummary = vm.endRide(); dest = Dest.END }
             com.two17industries.rideman.ui.ride.RideScreen(
                 state = ui,
                 settings = settings,
@@ -41,6 +49,8 @@ fun RidemanNav(vm: RideViewModel, onRideActiveChanged: (Boolean) -> Unit) {
             )
         }
         Dest.END -> {
+            // Hardware back still persists the ride (same as DONE) so data isn't lost.
+            BackHandler { vm.persistLastRide(); dest = Dest.START }
             EndScreen(
                 summary = lastSummary ?: vm.endRide(),
                 units = settings.units,

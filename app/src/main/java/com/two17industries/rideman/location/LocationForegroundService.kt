@@ -42,7 +42,10 @@ class LocationForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
-        return if (requestUpdates()) START_STICKY else START_NOT_STICKY
+        requestUpdates()
+        // START_NOT_STICKY: a ride is a user-driven session. If the process is killed,
+        // do NOT silently resurrect a headless tracking service with no UI to stop it.
+        return START_NOT_STICKY
     }
 
     private fun requestUpdates(): Boolean {

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -89,6 +90,9 @@ private fun CadenceButton(label: String, accent: androidx.compose.ui.graphics.Co
     Button(
         onClick = onClick,
         colors = ButtonDefaults.buttonColors(containerColor = accent),
-        modifier = Modifier.size(96.dp),
-    ) { Text(label, style = MaterialTheme.typography.bodyLarge) }
+        contentPadding = PaddingValues(4.dp),
+        modifier = Modifier.size(104.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge, maxLines = 1, softWrap = false)
+    }
 }

@@ -19,7 +19,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -158,8 +157,9 @@ private fun DetailLine(label: String, value: String, accent: Color, met: Boolean
     }
 }
 
-private fun formatDate(epochMillis: Long): String =
-    SimpleDateFormat("MMM d · h:mm a", Locale.US).format(Date(epochMillis))
+private val HISTORY_DATE_FMT = SimpleDateFormat("MMM d · h:mm a", Locale.US)
+
+private fun formatDate(epochMillis: Long): String = HISTORY_DATE_FMT.format(Date(epochMillis))
 
 private fun formatHistoryDuration(ms: Long): String {
     val totalSec = ms / 1000

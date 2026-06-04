@@ -31,6 +31,7 @@ fun RidemanNav(vm: RideViewModel, onRideActiveChanged: (Boolean) -> Unit) {
             StartScreen(
                 nextUp = progress?.nextIncomplete(),
                 planAvailable = vm.plan != null,
+                units = settings.units,
                 onPlanRide = { dest = Dest.PLAN_PICKER },
                 onFreeRide = { activePlanRide = null; vm.startRide(null); dest = Dest.RIDE },
                 onHistory = { dest = Dest.HISTORY },
@@ -46,6 +47,7 @@ fun RidemanNav(vm: RideViewModel, onRideActiveChanged: (Boolean) -> Unit) {
                 PlanPickerScreen(
                     plan = plan,
                     progress = progress,
+                    units = settings.units,
                     onStart = { ride ->
                         activePlanRide = ride
                         vm.startRide(ride.id)

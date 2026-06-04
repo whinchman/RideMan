@@ -21,13 +21,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.two17industries.rideman.BuildConfig
+import com.two17industries.rideman.core.PlanGrading
 import com.two17industries.rideman.core.PlanRide
+import com.two17industries.rideman.core.UnitSystem
+import com.two17industries.rideman.core.Units
 import com.two17industries.rideman.ui.theme.LocalAccent
 
 @Composable
 fun StartScreen(
     nextUp: PlanRide?,
     planAvailable: Boolean,
+    units: UnitSystem,
     onPlanRide: () -> Unit,
     onFreeRide: () -> Unit,
     onHistory: () -> Unit,
@@ -61,7 +65,7 @@ fun StartScreen(
                 val subtitle = when {
                     !planAvailable -> "plan unavailable"
                     nextUp != null -> "Next: Wk ${nextUp.week} · Ride ${nextUp.slot} — " +
-                        "${formatMiles(nextUp.targetMiles)}mi ${nextUp.pace.name.lowercase()}"
+                        "${formatPlanDistance(nextUp.targetMiles, units)} ${nextUp.pace.name.lowercase()}"
                     else -> "Plan complete 🎉"
                 }
                 Text(subtitle, style = MaterialTheme.typography.bodyLarge)
@@ -92,6 +96,13 @@ fun StartScreen(
     }
 }
 
-/** Trim trailing ".0" so 7.0 -> "7" but 3.5 -> "3.5". */
-internal fun formatMiles(mi: Double): String =
-    if (mi % 1.0 == 0.0) mi.toInt().toString() else mi.toString()
+/**
+ * Format a plan target (stored in miles) into the user's unit system, e.g. "7 MI" or "11.3 KM".
+ * Whole numbers drop the decimal; otherwise one decimal place.
+ */
+internal fun formatPlanDistance(targetMiles: Double, units: UnitSystem): String {
+    val value = Units.distance(targetMiles * PlanGrading.METERS_PER_MILE, units)
+    val num = if (value % 1.0 == 0.0) value.toInt().toString()
+        else String.format(java.util.Locale.US, "%.1f", value)
+    return "$num ${Units.distanceLabel(units)}"
+}

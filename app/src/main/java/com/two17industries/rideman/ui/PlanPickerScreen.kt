@@ -31,12 +31,14 @@ import androidx.compose.ui.unit.dp
 import com.two17industries.rideman.core.Plan
 import com.two17industries.rideman.core.PlanProgress
 import com.two17industries.rideman.core.PlanRide
+import com.two17industries.rideman.core.UnitSystem
 import com.two17industries.rideman.ui.theme.LocalAccent
 
 @Composable
 fun PlanPickerScreen(
     plan: Plan,
     progress: PlanProgress?,
+    units: UnitSystem,
     onStart: (PlanRide) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -63,8 +65,8 @@ fun PlanPickerScreen(
                     is PlanListItem.RideItem -> {
                         val ride = item.ride
                         val complete = progress?.isComplete(ride.id) == true
-                        if (ride.id == expandedId) ExpandedRow(ride, complete, accent)
-                        else CollapsedRow(ride, complete, accent) { expandedId = ride.id }
+                        if (ride.id == expandedId) ExpandedRow(ride, complete, accent, units)
+                        else CollapsedRow(ride, complete, accent, units) { expandedId = ride.id }
                     }
                 }
             }
@@ -104,6 +106,7 @@ private fun CollapsedRow(
     ride: PlanRide,
     complete: Boolean,
     accent: Color,
+    units: UnitSystem,
     onClick: () -> Unit,
 ) {
     val labelColor = if (complete) accent.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSurface
@@ -118,7 +121,7 @@ private fun CollapsedRow(
     ) {
         Text("Ride ${ride.slot} · ${ride.kind}", color = labelColor, style = MaterialTheme.typography.bodyLarge)
         Text(
-            "${formatMiles(ride.targetMiles)} mi  " + if (complete) "✓" else "○",
+            "${formatPlanDistance(ride.targetMiles, units)}  " + if (complete) "✓" else "○",
             color = if (complete) accent else accent.copy(alpha = 0.7f),
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.bodyLarge,
@@ -131,6 +134,7 @@ private fun ExpandedRow(
     ride: PlanRide,
     complete: Boolean,
     accent: Color,
+    units: UnitSystem,
 ) {
     Box(
         Modifier
@@ -146,7 +150,7 @@ private fun ExpandedRow(
                 style = MaterialTheme.typography.titleLarge,
             )
             Text(
-                "${formatMiles(ride.targetMiles)} mi",
+                formatPlanDistance(ride.targetMiles, units),
                 color = accent,
                 style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Bold),
             )

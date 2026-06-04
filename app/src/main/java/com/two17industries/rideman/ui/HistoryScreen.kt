@@ -129,7 +129,7 @@ private fun RideRow(
             if (expanded) {
                 if (planRide != null) {
                     val met = PlanGrading.isMet(planRide, ride.distanceM, plan!!.tolerancePercent)
-                    DetailLine("target", "${formatMiles(planRide.targetMiles)} mi  " + if (met) "✓ met" else "✗ short", accent, met)
+                    DetailLine("target", "${formatPlanDistance(planRide.targetMiles, units)}  " + if (met) "✓ met" else "✗ short", accent, met)
                 }
                 DetailLine("time", formatHistoryDuration(ride.totalTimeMs), accent, null)
                 DetailLine("avg speed", "${Units.speed(ride.avgSpeedMps, units).roundToInt()} ${Units.speedLabel(units)}", accent, null)

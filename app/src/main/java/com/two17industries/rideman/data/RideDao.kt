@@ -2,7 +2,9 @@ package com.two17industries.rideman.data
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.Query
 import androidx.room.Transaction
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface RideDao {
@@ -18,4 +20,12 @@ interface RideDao {
         insertTrackPoints(points.map { it.copy(rideId = rideId) })
         return rideId
     }
+
+    /** All rides, newest first — for the History screen. */
+    @Query("SELECT * FROM rides ORDER BY startedAt DESC")
+    fun getAllRides(): Flow<List<RideEntity>>
+
+    /** Rides tagged to a plan slot — for deriving plan progress. */
+    @Query("SELECT * FROM rides WHERE planRideId IS NOT NULL")
+    fun getPlanTaggedRides(): Flow<List<RideEntity>>
 }

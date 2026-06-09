@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -56,41 +56,41 @@ fun EndScreen(
         ) {
             Text("RIDE COMPLETE", color = accent, style = MaterialTheme.typography.titleLarge)
 
-        if (planRide != null) {
-            PlanResult(summary, planRide, tolerancePercent, units, accent)
-        }
-
-        val stats = buildList {
-            add("TIME" to formatDuration(summary.totalTimeMs))
-            if (planRide == null) {
-                add("DISTANCE" to
-                    "${String.format(Locale.US, "%.2f", Units.distance(summary.distanceM, units))} ${Units.distanceLabel(units)}")
+            if (planRide != null) {
+                PlanResult(summary, planRide, tolerancePercent, units, accent)
             }
-            add("MAX SPEED" to
-                "${Units.speed(summary.maxSpeedMps, units).roundToInt()} ${Units.speedLabel(units)}")
-            add("AVG SPEED" to
-                "${Units.speed(summary.avgSpeedMps, units).roundToInt()} ${Units.speedLabel(units)}")
-        }
 
-        val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-        if (landscape) {
-            stats.chunked(2).forEach { rowStats ->
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                ) {
-                    rowStats.forEach { (label, value) -> Stat(label, value, accent) }
+            val stats = buildList {
+                add("TIME" to formatDuration(summary.totalTimeMs))
+                if (planRide == null) {
+                    add("DISTANCE" to
+                        "${String.format(Locale.US, "%.2f", Units.distance(summary.distanceM, units))} ${Units.distanceLabel(units)}")
                 }
+                add("MAX SPEED" to
+                    "${Units.speed(summary.maxSpeedMps, units).roundToInt()} ${Units.speedLabel(units)}")
+                add("AVG SPEED" to
+                    "${Units.speed(summary.avgSpeedMps, units).roundToInt()} ${Units.speedLabel(units)}")
             }
-        } else {
-            stats.forEach { (label, value) -> Stat(label, value, accent) }
-        }
 
-        Button(
-            onClick = onDone,
-            colors = ButtonDefaults.buttonColors(containerColor = accent),
-            modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
-        ) { Text("DONE", style = MaterialTheme.typography.titleLarge) }
+            val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+            if (landscape) {
+                stats.chunked(2).forEach { rowStats ->
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                    ) {
+                        rowStats.forEach { (label, value) -> Stat(label, value, accent) }
+                    }
+                }
+            } else {
+                stats.forEach { (label, value) -> Stat(label, value, accent) }
+            }
+
+            Button(
+                onClick = onDone,
+                colors = ButtonDefaults.buttonColors(containerColor = accent),
+                modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+            ) { Text("DONE", style = MaterialTheme.typography.titleLarge) }
         }
     }
 }

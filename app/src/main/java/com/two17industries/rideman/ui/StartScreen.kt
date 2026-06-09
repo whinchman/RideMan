@@ -1,7 +1,5 @@
 package com.two17industries.rideman.ui
 
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -12,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -52,47 +52,47 @@ fun StartScreen(
         ) {
             Text(
                 "BIKEMAN",
-            color = accent,
-            style = MaterialTheme.typography.displayLarge.copy(fontSize = 64.sp),
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(48.dp))
+                color = accent,
+                style = MaterialTheme.typography.displayLarge.copy(fontSize = 64.sp),
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(48.dp))
 
-        Button(
-            onClick = onPlanRide,
-            enabled = planAvailable,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = accent,
-                disabledContainerColor = accent.copy(alpha = 0.20f),
-            ),
-            modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp),
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("PLAN RIDE", style = MaterialTheme.typography.titleLarge)
-                val subtitle = when {
-                    !planAvailable -> "plan unavailable"
-                    nextUp != null -> "Next: Wk ${nextUp.week} · Ride ${nextUp.slot} — " +
-                        "${formatPlanDistance(nextUp.targetMiles, units)} ${nextUp.pace.name.lowercase()}"
-                    else -> "Plan complete 🎉"
+            Button(
+                onClick = onPlanRide,
+                enabled = planAvailable,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = accent,
+                    disabledContainerColor = accent.copy(alpha = 0.20f),
+                ),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp),
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("PLAN RIDE", style = MaterialTheme.typography.titleLarge)
+                    val subtitle = when {
+                        !planAvailable -> "plan unavailable"
+                        nextUp != null -> "Next: Wk ${nextUp.week} · Ride ${nextUp.slot} — " +
+                            "${formatPlanDistance(nextUp.targetMiles, units)} ${nextUp.pace.name.lowercase()}"
+                        else -> "Plan complete 🎉"
+                    }
+                    Text(subtitle, style = MaterialTheme.typography.bodyLarge)
                 }
-                Text(subtitle, style = MaterialTheme.typography.bodyLarge)
             }
-        }
-        Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
-        OutlinedButton(onClick = onFreeRide, modifier = Modifier.fillMaxWidth().height(72.dp)) {
-            Text("FREE RIDE", color = accent, style = MaterialTheme.typography.titleLarge)
-        }
-        Spacer(Modifier.height(16.dp))
+            OutlinedButton(onClick = onFreeRide, modifier = Modifier.fillMaxWidth().height(72.dp)) {
+                Text("FREE RIDE", color = accent, style = MaterialTheme.typography.titleLarge)
+            }
+            Spacer(Modifier.height(16.dp))
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onHistory, modifier = Modifier.weight(1f).height(56.dp)) {
-                Text("HISTORY", color = accent, style = MaterialTheme.typography.labelLarge)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(onClick = onHistory, modifier = Modifier.weight(1f).height(56.dp)) {
+                    Text("HISTORY", color = accent, style = MaterialTheme.typography.labelLarge)
+                }
+                OutlinedButton(onClick = onSettings, modifier = Modifier.weight(1f).height(56.dp)) {
+                    Text("SETTINGS", color = accent, style = MaterialTheme.typography.labelLarge)
+                }
             }
-            OutlinedButton(onClick = onSettings, modifier = Modifier.weight(1f).height(56.dp)) {
-                Text("SETTINGS", color = accent, style = MaterialTheme.typography.labelLarge)
-            }
-        }
 
             Spacer(Modifier.height(48.dp))
             Text(

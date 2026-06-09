@@ -1,12 +1,16 @@
 package com.two17industries.rideman.ui
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -15,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
@@ -39,7 +44,7 @@ fun EndScreen(
 ) {
     val accent = LocalAccent.current
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
     ) {
@@ -49,18 +54,31 @@ fun EndScreen(
             PlanResult(summary, planRide, tolerancePercent, units, accent)
         }
 
-        Stat("TIME", formatDuration(summary.totalTimeMs), accent)
-        if (planRide == null) {
-            Stat("DISTANCE",
-                "${String.format(Locale.US, "%.2f", Units.distance(summary.distanceM, units))} ${Units.distanceLabel(units)}",
-                accent)
+        val stats = buildList {
+            add("TIME" to formatDuration(summary.totalTimeMs))
+            if (planRide == null) {
+                add("DISTANCE" to
+                    "${String.format(Locale.US, "%.2f", Units.distance(summary.distanceM, units))} ${Units.distanceLabel(units)}")
+            }
+            add("MAX SPEED" to
+                "${Units.speed(summary.maxSpeedMps, units).roundToInt()} ${Units.speedLabel(units)}")
+            add("AVG SPEED" to
+                "${Units.speed(summary.avgSpeedMps, units).roundToInt()} ${Units.speedLabel(units)}")
         }
-        Stat("MAX SPEED",
-            "${Units.speed(summary.maxSpeedMps, units).roundToInt()} ${Units.speedLabel(units)}",
-            accent)
-        Stat("AVG SPEED",
-            "${Units.speed(summary.avgSpeedMps, units).roundToInt()} ${Units.speedLabel(units)}",
-            accent)
+
+        val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+        if (landscape) {
+            stats.chunked(2).forEach { rowStats ->
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    rowStats.forEach { (label, value) -> Stat(label, value, accent) }
+                }
+            }
+        } else {
+            stats.forEach { (label, value) -> Stat(label, value, accent) }
+        }
 
         Button(
             onClick = onDone,

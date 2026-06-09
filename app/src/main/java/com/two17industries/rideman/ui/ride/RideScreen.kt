@@ -93,7 +93,7 @@ private fun RidePager(
     count: Int,
     state: RideUiState,
     settings: RidemanSettings,
-    modifier: Modifier,
+    modifier: Modifier = Modifier,
 ) {
     HorizontalPager(state = pagerState, modifier = modifier) { page ->
         when (screens[PagerWrap.screenIndex(page, count)]) {
@@ -108,23 +108,26 @@ private fun RidePager(
 
 @Composable
 private fun PaginatorDots(count: Int, currentIndex: Int, accent: Color, vertical: Boolean) {
-    @Composable
-    fun dots() {
-        repeat(count) { i ->
-            val dotPadding = if (vertical) Modifier.padding(vertical = 5.dp) else Modifier.padding(horizontal = 5.dp)
-            Box(
-                dotPadding
-                    .size(if (i == currentIndex) 12.dp else 8.dp)
-                    .clip(CircleShape)
-                    .background(if (i == currentIndex) accent else accent.copy(alpha = 0.3f))
-            )
+    if (vertical) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            repeat(count) { i -> Dot(active = i == currentIndex, accent = accent, vertical = true) }
+        }
+    } else {
+        Row(horizontalArrangement = Arrangement.Center) {
+            repeat(count) { i -> Dot(active = i == currentIndex, accent = accent, vertical = false) }
         }
     }
-    if (vertical) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) { dots() }
-    } else {
-        Row(horizontalArrangement = Arrangement.Center) { dots() }
-    }
+}
+
+@Composable
+private fun Dot(active: Boolean, accent: Color, vertical: Boolean) {
+    val pad = if (vertical) Modifier.padding(vertical = 5.dp) else Modifier.padding(horizontal = 5.dp)
+    Box(
+        pad
+            .size(if (active) 12.dp else 8.dp)
+            .clip(CircleShape)
+            .background(if (active) accent else accent.copy(alpha = 0.3f))
+    )
 }
 
 @Composable

@@ -3,6 +3,7 @@ package com.two17industries.rideman.ui
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -40,13 +41,17 @@ fun StartScreen(
     onSettings: () -> Unit,
 ) {
     val accent = LocalAccent.current
-    Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(
-            "BIKEMAN",
+    BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(24.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = maxHeight),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                "BIKEMAN",
             color = accent,
             style = MaterialTheme.typography.displayLarge.copy(fontSize = 64.sp),
             textAlign = TextAlign.Center,
@@ -89,12 +94,13 @@ fun StartScreen(
             }
         }
 
-        Spacer(Modifier.height(48.dp))
-        Text(
-            "v${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE}) · ${BuildConfig.GIT_COMMIT}",
-            color = accent.copy(alpha = 0.5f),
-            style = MaterialTheme.typography.bodyLarge,
-        )
+            Spacer(Modifier.height(48.dp))
+            Text(
+                "v${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE}) · ${BuildConfig.GIT_COMMIT}",
+                color = accent.copy(alpha = 0.5f),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        }
     }
 }
 

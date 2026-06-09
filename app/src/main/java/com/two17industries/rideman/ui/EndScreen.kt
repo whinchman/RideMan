@@ -4,10 +4,12 @@ import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -19,9 +21,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.two17industries.rideman.core.PlanGrading
@@ -43,12 +45,16 @@ fun EndScreen(
     onDone: () -> Unit,
 ) {
     val accent = LocalAccent.current
-    Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-    ) {
-        Text("RIDE COMPLETE", color = accent, style = MaterialTheme.typography.titleLarge)
+    BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(24.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = maxHeight),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        ) {
+            Text("RIDE COMPLETE", color = accent, style = MaterialTheme.typography.titleLarge)
 
         if (planRide != null) {
             PlanResult(summary, planRide, tolerancePercent, units, accent)
@@ -85,6 +91,7 @@ fun EndScreen(
             colors = ButtonDefaults.buttonColors(containerColor = accent),
             modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
         ) { Text("DONE", style = MaterialTheme.typography.titleLarge) }
+        }
     }
 }
 

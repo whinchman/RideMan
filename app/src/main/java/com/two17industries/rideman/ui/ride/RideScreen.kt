@@ -1,5 +1,6 @@
 package com.two17industries.rideman.ui.ride
 
+import android.content.res.Configuration
 import android.speech.tts.TextToSpeech
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -7,11 +8,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
@@ -26,7 +29,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.two17industries.rideman.core.PagerWrap
@@ -64,26 +69,77 @@ fun RideScreen(state: RideUiState, settings: RidemanSettings, onEndRide: () -> U
                 detectTapGestures(onDoubleTap = { speak(tts, currentState.value, currentUnits.value) })
             }
     ) {
-        Column(Modifier.fillMaxSize()) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-            ) { page ->
-                when (screens[PagerWrap.screenIndex(page, count)]) {
-                    RideScreen.SPEED -> SpeedometerScreen(state.speedMps, settings.units)
-                    RideScreen.ODOMETER -> OdometerScreen(state.distanceM, settings.units)
-                    RideScreen.COMPASS -> CompassScreen(state.headingDeg)
-                    RideScreen.ALTITUDE -> AltimeterScreen(state.altitudeM, settings.units)
-                    RideScreen.CADENCE -> CadenceScreen(settings.cadenceMode, settings.targetRpm)
-                }
+        val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val currentIndex = PagerWrap.screenIndex(pagerState.currentPage, count)
+
+        if (landscape) {
+            Row(Modifier.fillMaxSize()) {
+                RidePager(pagerState, screens, count, state, settings, Modifier.weight(1f).fillMaxHeight())
+                SideRail(count = count, currentIndex = currentIndex, onEndRide = onEndRide, accent = accent)
             }
-            BottomBar(
-                count = count,
-                currentIndex = PagerWrap.screenIndex(pagerState.currentPage, count),
-                onEndRide = onEndRide,
-                accent = accent,
+        } else {
+            Column(Modifier.fillMaxSize()) {
+                RidePager(pagerState, screens, count, state, settings, Modifier.weight(1f).fillMaxWidth())
+                BottomBar(count = count, currentIndex = currentIndex, onEndRide = onEndRide, accent = accent)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RidePager(
+    pagerState: PagerState,
+    screens: List<RideScreen>,
+    count: Int,
+    state: RideUiState,
+    settings: RidemanSettings,
+    modifier: Modifier,
+) {
+    HorizontalPager(state = pagerState, modifier = modifier) { page ->
+        when (screens[PagerWrap.screenIndex(page, count)]) {
+            RideScreen.SPEED -> SpeedometerScreen(state.speedMps, settings.units)
+            RideScreen.ODOMETER -> OdometerScreen(state.distanceM, settings.units)
+            RideScreen.COMPASS -> CompassScreen(state.headingDeg)
+            RideScreen.ALTITUDE -> AltimeterScreen(state.altitudeM, settings.units)
+            RideScreen.CADENCE -> CadenceScreen(settings.cadenceMode, settings.targetRpm)
+        }
+    }
+}
+
+@Composable
+private fun PaginatorDots(count: Int, currentIndex: Int, accent: Color, vertical: Boolean) {
+    @Composable
+    fun dots() {
+        repeat(count) { i ->
+            val dotPadding = if (vertical) Modifier.padding(vertical = 5.dp) else Modifier.padding(horizontal = 5.dp)
+            Box(
+                dotPadding
+                    .size(if (i == currentIndex) 12.dp else 8.dp)
+                    .clip(CircleShape)
+                    .background(if (i == currentIndex) accent else accent.copy(alpha = 0.3f))
             )
         }
+    }
+    if (vertical) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) { dots() }
+    } else {
+        Row(horizontalArrangement = Arrangement.Center) { dots() }
+    }
+}
+
+@Composable
+private fun SideRail(count: Int, currentIndex: Int, onEndRide: () -> Unit, accent: Color) {
+    Column(
+        Modifier.fillMaxHeight().padding(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            PaginatorDots(count = count, currentIndex = currentIndex, accent = accent, vertical = true)
+        }
+        Button(
+            onClick = onEndRide,
+            colors = ButtonDefaults.buttonColors(containerColor = accent),
+        ) { Text("END", style = MaterialTheme.typography.titleLarge) }
     }
 }
 
@@ -92,22 +148,11 @@ private fun BottomBar(
     count: Int,
     currentIndex: Int,
     onEndRide: () -> Unit,
-    accent: androidx.compose.ui.graphics.Color,
+    accent: Color,
 ) {
     Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(
-            Modifier.fillMaxWidth().padding(bottom = 12.dp),
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            repeat(count) { i ->
-                Box(
-                    Modifier
-                        .padding(horizontal = 5.dp)
-                        .size(if (i == currentIndex) 12.dp else 8.dp)
-                        .clip(CircleShape)
-                        .background(if (i == currentIndex) accent else accent.copy(alpha = 0.3f))
-                )
-            }
+        Box(Modifier.fillMaxWidth().padding(bottom = 12.dp), contentAlignment = Alignment.Center) {
+            PaginatorDots(count = count, currentIndex = currentIndex, accent = accent, vertical = false)
         }
         Button(
             onClick = onEndRide,

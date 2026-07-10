@@ -28,4 +28,22 @@ interface RideDao {
     /** Rides tagged to a plan slot — for deriving plan progress. */
     @Query("SELECT * FROM rides WHERE planRideId IS NOT NULL")
     fun getPlanTaggedRides(): Flow<List<RideEntity>>
+
+    @Query("SELECT * FROM rides WHERE id = :rideId")
+    suspend fun getRide(rideId: Long): RideEntity?
+
+    @Query("SELECT * FROM track_points WHERE rideId = :rideId ORDER BY timestamp ASC")
+    suspend fun getTrackPoints(rideId: Long): List<TrackPointEntity>
+
+    @Query(
+        "UPDATE rides SET stravaState = :state, stravaActivityId = :activityId, " +
+            "stravaExternalId = :externalId, stravaError = :error WHERE id = :rideId"
+    )
+    suspend fun updateStravaStatus(
+        rideId: Long,
+        state: StravaUploadState,
+        activityId: Long?,
+        externalId: String?,
+        error: String?,
+    )
 }

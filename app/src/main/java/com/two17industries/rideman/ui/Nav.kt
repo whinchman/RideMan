@@ -11,7 +11,7 @@ import androidx.compose.runtime.LaunchedEffect
 import com.two17industries.rideman.core.PlanRide
 import com.two17industries.rideman.core.RideSummary
 
-private enum class Dest { START, SETTINGS, RIDE, END, PLAN_PICKER, HISTORY }
+private enum class Dest { START, SETTINGS, RIDE, END, PLAN_PICKER, HISTORY, BACKFILL }
 
 @Composable
 fun RidemanNav(vm: RideViewModel, onRideActiveChanged: (Boolean) -> Unit) {
@@ -25,6 +25,8 @@ fun RidemanNav(vm: RideViewModel, onRideActiveChanged: (Boolean) -> Unit) {
     val ui by vm.ui.collectAsState()
     val progress by vm.progress.collectAsState()
     val allRides by vm.allRides.collectAsState()
+    val stravaConnected by vm.stravaConnected.collectAsState()
+    val stravaAthleteName by vm.stravaAthleteName.collectAsState()
 
     when (dest) {
         Dest.START -> {
@@ -59,8 +61,15 @@ fun RidemanNav(vm: RideViewModel, onRideActiveChanged: (Boolean) -> Unit) {
         }
         Dest.SETTINGS -> {
             BackHandler { dest = Dest.START }
+            val context = androidx.compose.ui.platform.LocalContext.current
             SettingsScreen(
                 current = settings,
+                stravaConnected = stravaConnected,
+                stravaAthleteName = stravaAthleteName,
+                onConnectStrava = {
+                    com.two17industries.rideman.strava.CustomTabLauncher.launch(context, vm.connectStravaUrl())
+                },
+                onDisconnectStrava = { vm.disconnectStrava() },
                 onSave = { vm.saveSettings(it) },
                 onDone = { dest = Dest.START },
                 onCancel = { dest = Dest.START },
@@ -74,6 +83,18 @@ fun RidemanNav(vm: RideViewModel, onRideActiveChanged: (Boolean) -> Unit) {
                 progress = progress,
                 units = settings.units,
                 onBack = { dest = Dest.START },
+                onRetryUpload = { vm.retryUpload(it) },
+                stravaConnected = stravaConnected,
+                onBackfill = { dest = Dest.BACKFILL },
+            )
+        }
+        Dest.BACKFILL -> {
+            BackHandler { dest = Dest.HISTORY }
+            BackfillScreen(
+                rides = allRides,
+                units = settings.units,
+                onUpload = { vm.backfillUpload(it) },
+                onDone = { dest = Dest.HISTORY },
             )
         }
         Dest.RIDE -> {

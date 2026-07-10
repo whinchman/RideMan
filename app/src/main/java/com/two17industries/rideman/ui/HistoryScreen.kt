@@ -31,6 +31,7 @@ import com.two17industries.rideman.core.PlanProgress
 import com.two17industries.rideman.core.UnitSystem
 import com.two17industries.rideman.core.Units
 import com.two17industries.rideman.data.RideEntity
+import com.two17industries.rideman.data.StravaUploadState
 import com.two17industries.rideman.ui.theme.LocalAccent
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -44,6 +45,9 @@ fun HistoryScreen(
     progress: PlanProgress?,
     units: UnitSystem,
     onBack: () -> Unit,
+    onRetryUpload: (Long) -> Unit,
+    stravaConnected: Boolean,
+    onBackfill: () -> Unit,
 ) {
     val accent = LocalAccent.current
     var expandedId by remember { mutableStateOf<Long?>(null) }
@@ -55,6 +59,15 @@ fun HistoryScreen(
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.clickable(onClick = onBack).padding(bottom = 12.dp),
         )
+
+        if (stravaConnected) {
+            Text(
+                "⭱ Upload past rides to Strava",
+                color = accent,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.clickable(onClick = onBackfill).padding(bottom = 8.dp),
+            )
+        }
 
         if (progress != null) {
             ProgressHeader(progress, accent)
@@ -69,6 +82,7 @@ fun HistoryScreen(
                     accent = accent,
                     expanded = ride.id == expandedId,
                     onToggle = { expandedId = if (expandedId == ride.id) null else ride.id },
+                    onRetryUpload = onRetryUpload,
                 )
             }
         }
@@ -103,6 +117,7 @@ private fun RideRow(
     accent: Color,
     expanded: Boolean,
     onToggle: () -> Unit,
+    onRetryUpload: (Long) -> Unit,
 ) {
     val planRide = ride.planRideId?.let { plan?.byId?.get(it) }
     val dist = String.format(Locale.US, "%.1f", Units.distance(ride.distanceM, units))
@@ -120,7 +135,10 @@ private fun RideRow(
         Column {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(formatDate(ride.startedAt), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), style = MaterialTheme.typography.bodyLarge)
-                Text(if (planRide != null) "PLAN" else "FREE", color = if (planRide != null) accent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StravaChip(state = ride.stravaState, accent = accent, onRetry = { onRetryUpload(ride.id) })
+                    Text(if (planRide != null) "PLAN" else "FREE", color = if (planRide != null) accent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
+                }
             }
             val main = if (planRide != null)
                 "Wk ${planRide.week} · Ride ${planRide.slot} — $dist $distLabel"
@@ -140,6 +158,24 @@ private fun RideRow(
             }
         }
     }
+}
+
+@Composable
+private fun StravaChip(state: StravaUploadState, accent: Color, onRetry: () -> Unit) {
+    val (label, retry) = when (state) {
+        StravaUploadState.NONE -> return
+        StravaUploadState.QUEUED -> "⏳ Queued" to false
+        StravaUploadState.UPLOADING -> "↑ Uploading" to false
+        StravaUploadState.UPLOADED -> "✓ Strava" to false
+        StravaUploadState.FAILED -> "⚠ Retry" to true
+    }
+    Text(
+        label,
+        color = if (state == StravaUploadState.FAILED) Color(0xFFFFCF3A) else accent,
+        fontWeight = FontWeight.Bold,
+        style = MaterialTheme.typography.labelLarge,
+        modifier = if (retry) Modifier.clickable(onClick = onRetry) else Modifier,
+    )
 }
 
 @Composable

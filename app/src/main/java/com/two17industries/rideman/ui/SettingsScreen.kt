@@ -49,6 +49,10 @@ import com.two17industries.rideman.ui.theme.accentFor
 @Composable
 fun SettingsScreen(
     current: RidemanSettings,
+    stravaConnected: Boolean,
+    stravaAthleteName: String?,
+    onConnectStrava: () -> Unit,
+    onDisconnectStrava: () -> Unit,
     onSave: (RidemanSettings) -> Unit,
     onDone: () -> Unit,
     onCancel: () -> Unit,
@@ -57,6 +61,7 @@ fun SettingsScreen(
     var cadenceMode by remember { mutableStateOf(current.cadenceMode) }
     var targetRpm by remember { mutableIntStateOf(current.targetRpm) }
     var theme by remember { mutableStateOf(current.theme) }
+    var stravaUploadEnabled by remember { mutableStateOf(current.stravaUploadEnabled) }
     // Ordered list of ALL ride screens; the Boolean is "enabled". Enabled ones keep
     // their saved order first, then the rest (disabled) in their default order.
     var screenItems by remember {
@@ -143,6 +148,42 @@ fun SettingsScreen(
             }
         }
 
+        Section("STRAVA", accent) {
+            if (stravaConnected) {
+                Text(
+                    "Connected" + (stravaAthleteName?.let { " as $it" } ?: ""),
+                    color = accent, fontSize = 17.sp, fontWeight = FontWeight.Bold,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Auto-upload rides", color = accent, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                    OptionPill(
+                        text = if (stravaUploadEnabled) "On" else "Off",
+                        selected = stravaUploadEnabled,
+                        accent = accent,
+                    ) { stravaUploadEnabled = !stravaUploadEnabled }
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .border(2.dp, accent, RoundedCornerShape(50))
+                        .clickable(onClick = onDisconnectStrava)
+                        .padding(horizontal = 22.dp, vertical = 13.dp),
+                ) { Text("DISCONNECT", color = accent, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(accent)
+                        .clickable(onClick = onConnectStrava)
+                        .padding(horizontal = 22.dp, vertical = 14.dp),
+                ) { Text("CONNECT TO STRAVA", color = Background, fontSize = 16.sp, fontWeight = FontWeight.Bold) }
+            }
+        }
+
         Section("RIDE SCREENS", accent) {
             Text(
                 "Tap to enable · arrows reorder",
@@ -186,6 +227,7 @@ fun SettingsScreen(
                         targetRpm = targetRpm,
                         theme = theme,
                         screenOrder = order.ifEmpty { RideScreen.entries.toList() },
+                        stravaUploadEnabled = stravaUploadEnabled,
                     )
                 )
                 onDone()

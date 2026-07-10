@@ -20,6 +20,16 @@ class UploadResponseParserTest {
         assertTrue(r is UploadResult.Duplicate)
     }
 
+    @Test fun duplicate_error_extracts_activity_id() {
+        val r = UploadResponseParser.parse(200, """{"id":99,"activity_id":null,"error":"duplicate of activity 777"}""")
+        assertEquals(UploadResult.Duplicate(777), r)
+    }
+
+    @Test fun duplicate_error_without_digits_has_null_id() {
+        val r = UploadResponseParser.parse(200, """{"id":99,"activity_id":null,"error":"duplicate activity"}""")
+        assertEquals(UploadResult.Duplicate(null), r)
+    }
+
     @Test fun other_error_is_terminal() {
         val r = UploadResponseParser.parse(200, """{"id":99,"activity_id":null,"error":"empty file"}""")
         assertTrue(r is UploadResult.Terminal)

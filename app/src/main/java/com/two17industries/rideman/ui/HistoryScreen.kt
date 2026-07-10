@@ -46,6 +46,7 @@ fun HistoryScreen(
     units: UnitSystem,
     onBack: () -> Unit,
     onRetryUpload: (Long) -> Unit,
+    onOpenActivity: (Long) -> Unit,
     stravaConnected: Boolean,
     onBackfill: () -> Unit,
 ) {
@@ -83,6 +84,7 @@ fun HistoryScreen(
                     expanded = ride.id == expandedId,
                     onToggle = { expandedId = if (expandedId == ride.id) null else ride.id },
                     onRetryUpload = onRetryUpload,
+                    onOpenActivity = onOpenActivity,
                 )
             }
         }
@@ -118,6 +120,7 @@ private fun RideRow(
     expanded: Boolean,
     onToggle: () -> Unit,
     onRetryUpload: (Long) -> Unit,
+    onOpenActivity: (Long) -> Unit,
 ) {
     val planRide = ride.planRideId?.let { plan?.byId?.get(it) }
     val dist = String.format(Locale.US, "%.1f", Units.distance(ride.distanceM, units))
@@ -136,7 +139,13 @@ private fun RideRow(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(formatDate(ride.startedAt), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), style = MaterialTheme.typography.bodyLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    StravaChip(state = ride.stravaState, accent = accent, onRetry = { onRetryUpload(ride.id) })
+                    StravaChip(
+                        state = ride.stravaState,
+                        activityId = ride.stravaActivityId,
+                        accent = accent,
+                        onRetry = { onRetryUpload(ride.id) },
+                        onOpenActivity = onOpenActivity,
+                    )
                     Text(if (planRide != null) "PLAN" else "FREE", color = if (planRide != null) accent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
                 }
             }
@@ -161,20 +170,32 @@ private fun RideRow(
 }
 
 @Composable
-private fun StravaChip(state: StravaUploadState, accent: Color, onRetry: () -> Unit) {
-    val (label, retry) = when (state) {
+private fun StravaChip(
+    state: StravaUploadState,
+    activityId: Long?,
+    accent: Color,
+    onRetry: () -> Unit,
+    onOpenActivity: (Long) -> Unit,
+) {
+    val label = when (state) {
         StravaUploadState.NONE -> return
-        StravaUploadState.QUEUED -> "⏳ Queued" to false
-        StravaUploadState.UPLOADING -> "↑ Uploading" to false
-        StravaUploadState.UPLOADED -> "✓ Strava" to false
-        StravaUploadState.FAILED -> "⚠ Retry" to true
+        StravaUploadState.QUEUED -> "⏳ Queued"
+        StravaUploadState.UPLOADING -> "↑ Uploading"
+        StravaUploadState.UPLOADED -> "✓ Strava"
+        StravaUploadState.FAILED -> "⚠ Retry"
+    }
+    val clickModifier = when {
+        state == StravaUploadState.FAILED -> Modifier.clickable(onClick = onRetry)
+        state == StravaUploadState.UPLOADED && activityId != null ->
+            Modifier.clickable { onOpenActivity(activityId) }
+        else -> Modifier
     }
     Text(
         label,
         color = if (state == StravaUploadState.FAILED) Color(0xFFFFCF3A) else accent,
         fontWeight = FontWeight.Bold,
         style = MaterialTheme.typography.labelLarge,
-        modifier = if (retry) Modifier.clickable(onClick = onRetry) else Modifier,
+        modifier = clickModifier,
     )
 }
 

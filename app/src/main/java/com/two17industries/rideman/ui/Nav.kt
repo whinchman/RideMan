@@ -77,6 +77,7 @@ fun RidemanNav(vm: RideViewModel, onRideActiveChanged: (Boolean) -> Unit) {
         }
         Dest.HISTORY -> {
             BackHandler { dest = Dest.START }
+            val context = androidx.compose.ui.platform.LocalContext.current
             HistoryScreen(
                 rides = allRides,
                 plan = vm.plan,
@@ -84,6 +85,9 @@ fun RidemanNav(vm: RideViewModel, onRideActiveChanged: (Boolean) -> Unit) {
                 units = settings.units,
                 onBack = { dest = Dest.START },
                 onRetryUpload = { vm.retryUpload(it) },
+                onOpenActivity = { id ->
+                    com.two17industries.rideman.strava.CustomTabLauncher.launch(context, "https://www.strava.com/activities/$id")
+                },
                 stravaConnected = stravaConnected,
                 onBackfill = { dest = Dest.BACKFILL },
             )

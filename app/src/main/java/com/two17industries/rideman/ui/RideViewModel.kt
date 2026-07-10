@@ -19,6 +19,11 @@ import com.two17industries.rideman.data.RideEntity
 import com.two17industries.rideman.location.LocationBus
 import com.two17industries.rideman.location.LocationForegroundService
 import com.two17industries.rideman.sensor.SensorRepository
+import com.two17industries.rideman.strava.OkHttpStravaHttp
+import com.two17industries.rideman.strava.StravaAuth
+import com.two17industries.rideman.strava.StravaTokenStore
+import com.two17industries.rideman.strava.StravaUploadScheduler
+import com.two17industries.rideman.BuildConfig
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -41,6 +46,54 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
     private val settingsStore = SettingsStore(app)
     private val sensors = SensorRepository(app)
     private val repo = RideRepository(RidemanDatabase.get(app).rideDao())
+
+    private val stravaStore = StravaTokenStore(app)
+    private val stravaAuth = StravaAuth(
+        clientId = BuildConfig.STRAVA_CLIENT_ID,
+        clientSecret = BuildConfig.STRAVA_CLIENT_SECRET,
+        loadTokens = { stravaStore.load() },
+        saveTokens = { stravaStore.save(it) },
+        clearTokens = { stravaStore.clear() },
+        http = OkHttpStravaHttp(),
+        nowEpochSec = { System.currentTimeMillis() / 1000 },
+    )
+
+    private val _stravaConnected = MutableStateFlow(stravaStore.isConnected)
+    val stravaConnected: StateFlow<Boolean> = _stravaConnected.asStateFlow()
+
+    private val _stravaAthleteName = MutableStateFlow(stravaAuth.athleteFirstName)
+    val stravaAthleteName: StateFlow<String?> = _stravaAthleteName.asStateFlow()
+
+    fun connectStravaUrl(): String = stravaAuth.authorizeUrl()
+
+    /** Called by MainActivity.onResume after the OAuth callback runs. */
+    fun refreshStravaConnection() {
+        _stravaConnected.value = stravaStore.isConnected
+        _stravaAthleteName.value = stravaAuth.athleteFirstName
+    }
+
+    fun disconnectStrava() {
+        stravaAuth.disconnect()
+        refreshStravaConnection()
+    }
+
+    fun retryUpload(rideId: Long) {
+        viewModelScope.launch {
+            val ride = repo.getRide(rideId) ?: return@launch
+            repo.markQueued(rideId, ride)
+            StravaUploadScheduler.enqueue(getApplication(), rideId)
+        }
+    }
+
+    fun backfillUpload(rideIds: List<Long>) {
+        viewModelScope.launch {
+            for (id in rideIds) {
+                val ride = repo.getRide(id) ?: continue
+                repo.markQueued(id, ride)
+                StravaUploadScheduler.enqueue(getApplication(), id)
+            }
+        }
+    }
 
     /** Parsed once at startup; null if the asset is missing/malformed (plan features disable). */
     val plan: Plan? = runCatching { PlanLoader.load(app) }
@@ -171,7 +224,14 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
     fun persistLastRide() {
         val summary = lastSummary ?: return
         val snapshot = track.toList()
-        viewModelScope.launch { repo.saveRide(summary, snapshot, activePlanRideId) }
+        viewModelScope.launch {
+            val rideId = repo.saveRide(summary, snapshot, activePlanRideId)
+            if (settings.value.stravaUploadEnabled && stravaStore.isConnected) {
+                val ride = repo.getRide(rideId) ?: return@launch
+                repo.markQueued(rideId, ride)
+                StravaUploadScheduler.enqueue(getApplication(), rideId)
+            }
+        }
     }
 
     fun saveSettings(updated: RidemanSettings) {

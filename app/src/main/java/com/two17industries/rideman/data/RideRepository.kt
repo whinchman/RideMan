@@ -2,6 +2,7 @@ package com.two17industries.rideman.data
 
 import com.two17industries.rideman.core.LocationSample
 import com.two17industries.rideman.core.RideSummary
+import com.two17industries.rideman.strava.StravaExternalId
 import kotlinx.coroutines.flow.Flow
 
 class RideRepository(private val dao: RideDao) {
@@ -37,4 +38,16 @@ class RideRepository(private val dao: RideDao) {
         }
         return dao.insertRideWithTrack(ride, points)
     }
+
+    suspend fun markQueued(rideId: Long, ride: RideEntity) {
+        dao.updateStravaStatus(
+            rideId = rideId,
+            state = StravaUploadState.QUEUED,
+            activityId = null,
+            externalId = StravaExternalId.forRide(ride.id, ride.startedAt),
+            error = null,
+        )
+    }
+
+    suspend fun getRide(rideId: Long): RideEntity? = dao.getRide(rideId)
 }

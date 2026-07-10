@@ -28,6 +28,19 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".strava.StravaCallbackActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="rideman" android:host="strava-callback" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".location.LocationForegroundService"
             android:exported="false"

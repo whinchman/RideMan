@@ -20,6 +20,8 @@ import com.two17industries.rideman.ui.theme.RidemanTheme
 
 class MainActivity : ComponentActivity() {
 
+    private var rideViewModel: RideViewModel? = null
+
     private val permissions = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { }
@@ -36,9 +38,15 @@ class MainActivity : ComponentActivity() {
         setContent { App() }
     }
 
+    override fun onResume() {
+        super.onResume()
+        rideViewModel?.refreshStravaConnection()
+    }
+
     @Composable
     private fun App() {
         val vm: RideViewModel = viewModel()
+        rideViewModel = vm
         val settings by vm.settings.collectAsState()
         RidemanTheme(theme = settings.theme) {
             Surface(modifier = Modifier.fillMaxSize()) {

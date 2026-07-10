@@ -1,5 +1,7 @@
 package com.two17industries.rideman.strava
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -51,20 +53,27 @@ class StravaAuth(
         if (!StravaTokenLogic.needsRefresh(nowEpochSec(), current.expiresAtEpochSec)) {
             return current.accessToken
         }
-        val resp = http.postForm(
-            TOKEN_URL,
-            mapOf(
-                "client_id" to clientId,
-                "client_secret" to clientSecret,
-                "grant_type" to "refresh_token",
-                "refresh_token" to current.refreshToken,
-            ),
-        )
-        require(resp.isSuccess) { "Token refresh failed: HTTP ${resp.code}" }
-        val root = json.parseToJsonElement(resp.body).jsonObject
-        val refreshed = tokensFrom(root, fallbackName = current.athleteFirstName)
-        saveTokens(refreshed)
-        return refreshed.accessToken
+        return refreshMutex.withLock {
+            // Another caller may have refreshed while we waited for the lock.
+            val latest = loadTokens() ?: error("Not connected to Strava")
+            if (!StravaTokenLogic.needsRefresh(nowEpochSec(), latest.expiresAtEpochSec)) {
+                return@withLock latest.accessToken
+            }
+            val resp = http.postForm(
+                TOKEN_URL,
+                mapOf(
+                    "client_id" to clientId,
+                    "client_secret" to clientSecret,
+                    "grant_type" to "refresh_token",
+                    "refresh_token" to latest.refreshToken,
+                ),
+            )
+            require(resp.isSuccess) { "Token refresh failed: HTTP ${resp.code}" }
+            val root = json.parseToJsonElement(resp.body).jsonObject
+            val refreshed = tokensFrom(root, fallbackName = latest.athleteFirstName)
+            saveTokens(refreshed)
+            refreshed.accessToken
+        }
     }
 
     fun disconnect() = clearTokens()
@@ -83,5 +92,11 @@ class StravaAuth(
         const val AUTHORIZE_URL = "https://www.strava.com/oauth/authorize"
         const val TOKEN_URL = "https://www.strava.com/oauth/token"
         const val REDIRECT_URI = "rideman://strava-callback"
+
+        // Shared across every StravaAuth instance in the process, since the companion
+        // object is one-per-class. This serializes concurrent refreshes (e.g. from
+        // parallel backfill WorkManager jobs) so Strava's rotating refresh token
+        // can't be raced and invalidated by a losing concurrent call.
+        private val refreshMutex = Mutex()
     }
 }

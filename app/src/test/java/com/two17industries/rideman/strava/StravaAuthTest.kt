@@ -96,4 +96,21 @@ class StravaAuthTest {
         assertEquals("Will", store.tokens?.athleteFirstName)
         assertEquals("refresh_token", http.formCalls.single().second["grant_type"])
     }
+
+    @Test fun second_call_after_refresh_reuses_new_token_without_refreshing_again() = runTest {
+        val http = FakeHttp(
+            formResponse = HttpResponse(
+                200,
+                """{"access_token":"NEW","refresh_token":"RRR2","expires_at":20000}""",
+            ),
+        )
+        val store = MemStore().apply {
+            tokens = StravaTokens("OLD", "RRR", expiresAtEpochSec = 5000, athleteFirstName = "Will")
+        }
+        val a = auth(http, store) { 6000 } // past expiry, before new expiry (20000)
+        assertEquals("NEW", a.freshAccessToken())
+        // Second call should see the already-refreshed token and skip a redundant refresh.
+        assertEquals("NEW", a.freshAccessToken())
+        assertEquals(1, http.formCalls.size)
+    }
 }

@@ -31,6 +31,7 @@ class DashBleClient(private val context: Context) {
 
     @Volatile private var gatt: BluetoothGatt? = null
     @Volatile private var characteristic: BluetoothGattCharacteristic? = null
+    @Volatile private var timeChar: BluetoothGattCharacteristic? = null
     @Volatile private var scanning = false
     @Volatile private var wantRunning = false
 
@@ -49,12 +50,26 @@ class DashBleClient(private val context: Context) {
         gatt?.close()
         gatt = null
         characteristic = null
+        timeChar = null
         DashStatus.set(DashConnectionState.DISABLED)
     }
 
     fun write(bytes: ByteArray) {
         val g = gatt ?: return
         val c = characteristic ?: return
+        if (!hasBlePermissions()) return
+        g.writeCharacteristic(c, bytes, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
+    }
+
+    /**
+     * Writes the time-sync packet. No-ops if the peer has no time-sync characteristic —
+     * i.e. a board on older firmware. That is not an error: the dash keeps working, it
+     * just has no clock. MUST only be called from the broadcaster's 1 Hz ticker, which
+     * is the single caller of the GATT write path (see writeTime/write racing note).
+     */
+    fun writeTime(bytes: ByteArray) {
+        val g = gatt ?: return
+        val c = timeChar ?: return
         if (!hasBlePermissions()) return
         g.writeCharacteristic(c, bytes, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
     }
@@ -95,6 +110,7 @@ class DashBleClient(private val context: Context) {
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     characteristic = null
+                    timeChar = null
                     g.close()
                     if (gatt === g) gatt = null
                     DashStatus.set(DashConnectionState.DISCONNECTED)
@@ -104,8 +120,10 @@ class DashBleClient(private val context: Context) {
         }
 
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
-            val ch = g.getService(DashBleContract.SERVICE_UUID)
-                ?.getCharacteristic(DashBleContract.TELEMETRY_UUID)
+            val svc = g.getService(DashBleContract.SERVICE_UUID)
+            val ch = svc?.getCharacteristic(DashBleContract.TELEMETRY_UUID)
+            // Absent on older firmware — not an error, we just never get a clock.
+            timeChar = svc?.getCharacteristic(DashBleContract.TIME_SYNC_UUID)
             if (ch != null) {
                 characteristic = ch
                 DashStatus.set(DashConnectionState.CONNECTED)

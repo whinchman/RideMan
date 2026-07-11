@@ -23,6 +23,7 @@ data class RidemanSettings(
     val targetRpm: Int = 80,
     val theme: ThemeChoice = ThemeChoice.AMBER,
     val stravaUploadEnabled: Boolean = true,
+    val dashEnabled: Boolean = false,
 )
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -35,6 +36,7 @@ class SettingsStore(private val context: Context) {
         val TARGET_RPM = intPreferencesKey("target_rpm")
         val THEME = stringPreferencesKey("theme")
         val STRAVA_UPLOAD = booleanPreferencesKey("strava_upload_enabled")
+        val DASH_ENABLED = booleanPreferencesKey("dash_enabled")
     }
 
     val settings: Flow<RidemanSettings> = context.dataStore.data.map { p ->
@@ -51,6 +53,7 @@ class SettingsStore(private val context: Context) {
             theme = p[Keys.THEME]?.let { runCatching { ThemeChoice.valueOf(it) }.getOrNull() }
                 ?: ThemeChoice.AMBER,
             stravaUploadEnabled = p[Keys.STRAVA_UPLOAD] ?: true,
+            dashEnabled = p[Keys.DASH_ENABLED] ?: false,
         )
     }
 
@@ -62,6 +65,7 @@ class SettingsStore(private val context: Context) {
             p[Keys.TARGET_RPM] = s.targetRpm
             p[Keys.THEME] = s.theme.name
             p[Keys.STRAVA_UPLOAD] = s.stravaUploadEnabled
+            p[Keys.DASH_ENABLED] = s.dashEnabled
         }
     }
 }

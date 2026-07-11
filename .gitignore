@@ -1,6 +1,11 @@
 .env
 
+
+
+# Claude
+.claude/
 .superpowers/
+docs/superpowers/
 
 # Android / Gradle
 .gradle/

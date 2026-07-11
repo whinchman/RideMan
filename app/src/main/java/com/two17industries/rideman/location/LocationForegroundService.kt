@@ -36,6 +36,14 @@ class LocationForegroundService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var broadcaster: DashBroadcaster? = null
 
+    // Synchronous idempotence guard for broadcaster creation. onStartCommand can be re-entered
+    // (e.g. a double-tap of "start ride" fires startForegroundService twice on an already-running
+    // service); settings.first() suspends, so a null-check on `broadcaster` from inside the
+    // launch below is itself racy — both launches could pass the check before either assigns.
+    // This flag must be set synchronously, before the coroutine suspends, to actually prevent
+    // a second DashBroadcaster (and thus a second 1 Hz GATT writer) from being created.
+    private var dashRequested = false
+
     private val callback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
             val loc = result.lastLocation ?: return
@@ -74,9 +82,12 @@ class LocationForegroundService : Service() {
             startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
         }
         requestUpdates()
-        scope.launch {
-            if (SettingsStore(applicationContext).settings.first().dashEnabled) {
-                broadcaster = DashBroadcaster(applicationContext, scope).also { it.start() }
+        if (!dashRequested) {
+            dashRequested = true
+            scope.launch {
+                if (SettingsStore(applicationContext).settings.first().dashEnabled) {
+                    broadcaster = DashBroadcaster(applicationContext, scope).also { it.start() }
+                }
             }
         }
         // START_NOT_STICKY: a ride is a user-driven session. If the process is killed,

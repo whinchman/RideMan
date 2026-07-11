@@ -6,6 +6,7 @@ import com.two17industries.rideman.core.RideTracker
 import com.two17industries.rideman.core.UnitSystem
 import com.two17industries.rideman.data.SettingsStore
 import com.two17industries.rideman.location.LocationBus
+import java.util.TimeZone
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -31,6 +32,7 @@ class DashBroadcaster(
     @Volatile private var latest: LocationSample? = null
     @Volatile private var unitsUS: Boolean = true
     @Volatile private var themeIndex: Int = 0
+    private val timeSync = TimeSyncScheduler()
 
     private val jobs = mutableListOf<Job>()
 
@@ -50,10 +52,29 @@ class DashBroadcaster(
             settingsStore.settings.map { it.theme.ordinal }.collect { themeIndex = it }
         }
         jobs += scope.launch {
+            DashStatus.state.collect { state ->
+                // Every reconnect re-arms an immediate sync: the board deep-sleeps after
+                // 2 min disconnected and cold-boots with millis() reset, losing its clock.
+                if (state == DashConnectionState.CONNECTED) timeSync.onConnected()
+            }
+        }
+        jobs += scope.launch {
             while (isActive) {
-                val elapsedSec = (System.currentTimeMillis() - startMillis) / 1000
-                val telemetry = TelemetryBuilder.build(latest, tracker.distanceM, elapsedSec, unitsUS, themeIndex)
-                client.write(TelemetryPacket.encode(telemetry))
+                val nowMillis = System.currentTimeMillis()
+                if (timeSync.due(nowMillis)) {
+                    // Time-sync tick: write ONLY the time packet. The ticker must stay the
+                    // sole caller of the GATT write path — writeCharacteristic is
+                    // fire-and-forget with no queue, so two writes in one tick can collide
+                    // with GATT_BUSY and be silently dropped. Skipping one telemetry frame
+                    // is free: the firmware's STALE_MS is 3000 ms.
+                    val offsetMillis = TimeZone.getDefault().getOffset(nowMillis)
+                    client.writeTime(TimeSyncPacket.now(nowMillis, offsetMillis))
+                    timeSync.markSent(nowMillis)
+                } else {
+                    val elapsedSec = (nowMillis - startMillis) / 1000
+                    val telemetry = TelemetryBuilder.build(latest, tracker.distanceM, elapsedSec, unitsUS, themeIndex)
+                    client.write(TelemetryPacket.encode(telemetry))
+                }
                 delay(1000)
             }
         }

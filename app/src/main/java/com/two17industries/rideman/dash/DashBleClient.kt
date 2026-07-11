@@ -22,6 +22,13 @@ import androidx.core.content.ContextCompat
  * BLE central: scans for the T-Display by service UUID, connects, and writes telemetry to the
  * Telemetry characteristic (write-without-response). Auto-reconnects on drop. All calls are
  * no-ops (not crashes) when BLE permissions are missing or Bluetooth is off.
+ *
+ * [write] and [writeTime] are both fire-and-forget: `WRITE_TYPE_NO_RESPONSE`, the
+ * `writeCharacteristic` return value is ignored, and there is no write queue or
+ * `onCharacteristicWrite` callback. That is safe ONLY because the broadcaster's 1 Hz ticker
+ * is the sole caller of this write path (one write per tick, never both `write` and
+ * `writeTime` in the same tick). A second concurrent writer would collide on `GATT_BUSY`
+ * and be silently dropped — there is nothing anywhere that would surface the failure.
  */
 @SuppressLint("MissingPermission") // guarded by hasBlePermissions()
 class DashBleClient(private val context: Context) {
@@ -65,7 +72,9 @@ class DashBleClient(private val context: Context) {
      * Writes the time-sync packet. No-ops if the peer has no time-sync characteristic —
      * i.e. a board on older firmware. That is not an error: the dash keeps working, it
      * just has no clock. MUST only be called from the broadcaster's 1 Hz ticker, which
-     * is the single caller of the GATT write path (see writeTime/write racing note).
+     * is the single caller of the GATT write path: this is fire-and-forget with no queue
+     * and an ignored return value, so a second concurrent writer would collide on
+     * GATT_BUSY and be silently dropped (see class KDoc).
      */
     fun writeTime(bytes: ByteArray) {
         val g = gatt ?: return

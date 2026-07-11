@@ -29,10 +29,10 @@ class DashBleClient(private val context: Context) {
     private val manager by lazy { context.getSystemService(BluetoothManager::class.java) }
     private val scanner: BluetoothLeScanner? get() = manager?.adapter?.bluetoothLeScanner
 
-    private var gatt: BluetoothGatt? = null
-    private var characteristic: BluetoothGattCharacteristic? = null
-    private var scanning = false
-    private var wantRunning = false
+    @Volatile private var gatt: BluetoothGatt? = null
+    @Volatile private var characteristic: BluetoothGattCharacteristic? = null
+    @Volatile private var scanning = false
+    @Volatile private var wantRunning = false
 
     fun start() {
         if (!hasBlePermissions() || manager?.adapter?.isEnabled != true) {
@@ -82,7 +82,7 @@ class DashBleClient(private val context: Context) {
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             stopScan()
-            result.device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+            gatt = result.device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
         }
     }
 

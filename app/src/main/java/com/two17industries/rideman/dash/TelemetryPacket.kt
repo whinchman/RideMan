@@ -15,6 +15,8 @@ data class Telemetry(
     val unitsUS: Boolean,
     val rideActive: Boolean,
     val gpsValid: Boolean,
+    /** Theme index 0..3 (0=amber,1=acid-green,2=electric-cyan,3=hot-magenta) → flags bits 3–4. */
+    val theme: Int = 0,
 )
 
 /** Encodes [Telemetry] into the frozen 16-byte little-endian packet. */
@@ -25,12 +27,14 @@ object TelemetryPacket {
     private const val FLAG_UNITS_US = 0x01
     private const val FLAG_RIDE_ACTIVE = 0x02
     private const val FLAG_GPS_VALID = 0x04
+    private const val THEME_SHIFT = 3
 
     fun encode(t: Telemetry): ByteArray {
         var flags = 0
         if (t.unitsUS) flags = flags or FLAG_UNITS_US
         if (t.rideActive) flags = flags or FLAG_RIDE_ACTIVE
         if (t.gpsValid) flags = flags or FLAG_GPS_VALID
+        flags = flags or ((t.theme and 0x03) shl THEME_SHIFT)   // bits 3–4
 
         val speedCmps = (t.speedMps * 100f).roundToInt().coerceIn(0, 0xFFFF)
         val distance = t.distanceM.roundToLong().coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()

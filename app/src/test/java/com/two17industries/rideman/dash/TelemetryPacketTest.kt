@@ -40,6 +40,17 @@ class TelemetryPacketTest {
         )
     }
 
+    @Test fun theme_index_encodes_into_flags_bits_3_4() {
+        // VT (shared with the firmware decoder test): US+ride+fix + theme 2 → flags 0x17.
+        val t = Telemetry(
+            0f, 0.0, 0, 0f, 0.0,
+            unitsUS = true, rideActive = true, gpsValid = true, theme = 2,
+        )
+        val out = TelemetryPacket.encode(t)
+        assertEquals(0x01.toByte(), out[0])
+        assertEquals(0x17.toByte(), out[1])
+    }
+
     @Test fun packet_is_16_bytes() {
         val t = Telemetry(1f, 1.0, 1, 1f, 1.0, unitsUS = true, rideActive = true, gpsValid = true)
         assertEquals(16, TelemetryPacket.encode(t).size)

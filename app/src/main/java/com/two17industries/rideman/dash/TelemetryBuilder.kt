@@ -9,7 +9,13 @@ import com.two17industries.rideman.core.LocationSample
  * but distance and elapsed still flow through.
  */
 object TelemetryBuilder {
-    fun build(sample: LocationSample?, distanceM: Double, elapsedSec: Long, unitsUS: Boolean): Telemetry =
+    fun build(
+        sample: LocationSample?,
+        distanceM: Double,
+        elapsedSec: Long,
+        unitsUS: Boolean,
+        themeIndex: Int = 0,
+    ): Telemetry =
         Telemetry(
             speedMps = sample?.speedMps ?: 0f,
             distanceM = distanceM,
@@ -19,5 +25,6 @@ object TelemetryBuilder {
             unitsUS = unitsUS,
             rideActive = true,
             gpsValid = sample != null,
+            theme = themeIndex,
         )
 }

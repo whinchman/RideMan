@@ -30,6 +30,7 @@ class DashBroadcaster(
     private val tracker = RideTracker(startMillis)
     @Volatile private var latest: LocationSample? = null
     @Volatile private var unitsUS: Boolean = true
+    @Volatile private var themeIndex: Int = 0
 
     private val jobs = mutableListOf<Job>()
 
@@ -46,9 +47,12 @@ class DashBroadcaster(
             settingsStore.settings.map { it.units }.collect { unitsUS = it == UnitSystem.AMERICAN }
         }
         jobs += scope.launch {
+            settingsStore.settings.map { it.theme.ordinal }.collect { themeIndex = it }
+        }
+        jobs += scope.launch {
             while (isActive) {
                 val elapsedSec = (System.currentTimeMillis() - startMillis) / 1000
-                val telemetry = TelemetryBuilder.build(latest, tracker.distanceM, elapsedSec, unitsUS)
+                val telemetry = TelemetryBuilder.build(latest, tracker.distanceM, elapsedSec, unitsUS, themeIndex)
                 client.write(TelemetryPacket.encode(telemetry))
                 delay(1000)
             }

@@ -42,4 +42,12 @@ class TimeSyncSchedulerTest {
         assertFalse(s.due(nowMs = 40_000L))
         assertTrue(s.due(nowMs = 65_000L))
     }
+
+    @Test fun backward_clock_jump_forces_an_immediate_resync() {
+        // System.currentTimeMillis() is wall-clock, not monotonic: an NTP correction can step it
+        // backwards. A negative delta must re-sync, not blind the scheduler for the jump's duration.
+        val s = TimeSyncScheduler(intervalMs = 60_000L)
+        s.markSent(nowMs = 600_000L)
+        assertTrue(s.due(nowMs = 30_000L))
+    }
 }

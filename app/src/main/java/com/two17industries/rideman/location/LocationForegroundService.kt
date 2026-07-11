@@ -17,10 +17,21 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.two17industries.rideman.R
 import com.two17industries.rideman.core.LocationSample
+import com.two17industries.rideman.dash.DashBroadcaster
+import com.two17industries.rideman.data.SettingsStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 class LocationForegroundService : Service() {
 
     private val client by lazy { LocationServices.getFusedLocationProviderClient(this) }
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var broadcaster: DashBroadcaster? = null
 
     private val callback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -41,8 +52,17 @@ class LocationForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+        startForeground(
+            NOTIF_ID,
+            buildNotification(),
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
+        )
         requestUpdates()
+        scope.launch {
+            if (SettingsStore(applicationContext).settings.first().dashEnabled) {
+                broadcaster = DashBroadcaster(applicationContext, scope).also { it.start() }
+            }
+        }
         // START_NOT_STICKY: a ride is a user-driven session. If the process is killed,
         // do NOT silently resurrect a headless tracking service with no UI to stop it.
         return START_NOT_STICKY
@@ -63,6 +83,9 @@ class LocationForegroundService : Service() {
 
     override fun onDestroy() {
         client.removeLocationUpdates(callback)
+        broadcaster?.stop()
+        broadcaster = null
+        scope.cancel()
         super.onDestroy()
     }
 

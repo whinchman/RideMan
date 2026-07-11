@@ -10,6 +10,9 @@ package com.two17industries.rideman.dash
  *
  * That is precisely why no write-confirmation plumbing is needed: the next sync is never
  * more than one interval away.
+ *
+ * Thread-confinement: [lastSentMs] is NOT thread-safe. Callers must ensure all accesses occur on
+ * the same thread; currently safe via DashBroadcaster running all coroutines on Dispatchers.Main.immediate.
  */
 class TimeSyncScheduler(private val intervalMs: Long = 60_000L) {
 

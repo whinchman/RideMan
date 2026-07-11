@@ -25,6 +25,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +41,8 @@ import androidx.compose.ui.unit.sp
 import com.two17industries.rideman.core.Cadence
 import com.two17industries.rideman.core.CadenceMode
 import com.two17industries.rideman.core.UnitSystem
+import com.two17industries.rideman.dash.DashConnectionState
+import com.two17industries.rideman.dash.DashStatus
 import com.two17industries.rideman.data.RideScreen
 import com.two17industries.rideman.data.RidemanSettings
 import com.two17industries.rideman.data.ThemeChoice
@@ -62,6 +65,7 @@ fun SettingsScreen(
     var targetRpm by remember { mutableIntStateOf(current.targetRpm) }
     var theme by remember { mutableStateOf(current.theme) }
     var stravaUploadEnabled by remember { mutableStateOf(current.stravaUploadEnabled) }
+    var dashEnabled by remember { mutableStateOf(current.dashEnabled) }
     // Ordered list of ALL ride screens; the Boolean is "enabled". Enabled ones keep
     // their saved order first, then the rest (disabled) in their default order.
     var screenItems by remember {
@@ -148,6 +152,31 @@ fun SettingsScreen(
             }
         }
 
+        Section("HANDLEBAR DASHBOARD", accent) {
+            val dashState by DashStatus.state.collectAsState()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("T-Display over BLE", color = accent, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                OptionPill(
+                    text = if (dashEnabled) "On" else "Off",
+                    selected = dashEnabled,
+                    accent = accent,
+                ) { dashEnabled = !dashEnabled }
+            }
+            if (dashEnabled) {
+                val label = when (dashState) {
+                    DashConnectionState.CONNECTED -> "Connected"
+                    DashConnectionState.SCANNING -> "Searching…"
+                    DashConnectionState.DISCONNECTED -> "Disconnected"
+                    DashConnectionState.DISABLED -> "Idle (starts with your ride)"
+                }
+                Text(label, color = accent.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+
         Section("STRAVA", accent) {
             if (stravaConnected) {
                 Text(
@@ -228,6 +257,7 @@ fun SettingsScreen(
                         theme = theme,
                         screenOrder = order.ifEmpty { RideScreen.entries.toList() },
                         stravaUploadEnabled = stravaUploadEnabled,
+                        dashEnabled = dashEnabled,
                     )
                 )
                 onDone()

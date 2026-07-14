@@ -43,7 +43,6 @@ import com.two17industries.rideman.ui.components.CheckSquare
 import com.two17industries.rideman.ui.components.HairLine
 import com.two17industries.rideman.ui.components.PromptLabel
 import com.two17industries.rideman.ui.components.TerminalButton
-import com.two17industries.rideman.ui.components.TerminalButtonStyle
 import com.two17industries.rideman.ui.components.glow
 import com.two17industries.rideman.ui.theme.BorderCyanDim
 import com.two17industries.rideman.ui.theme.Cyan

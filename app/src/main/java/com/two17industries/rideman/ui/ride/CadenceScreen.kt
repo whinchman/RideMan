@@ -7,8 +7,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -93,7 +93,7 @@ private fun CadenceButton(label: String, accent: androidx.compose.ui.graphics.Co
         onClick = onClick,
         style = TerminalButtonStyle.PRIMARY,
         accent = accent,
-        fontSize = 20.sp,
-        modifier = Modifier.size(width = 104.dp, height = 72.dp),
+        fontSize = 16.sp,
+        modifier = Modifier.height(96.dp),
     )
 }

@@ -9,6 +9,7 @@ import com.two17industries.rideman.core.RideSummary
 import com.two17industries.rideman.core.RideTracker
 import com.two17industries.rideman.data.RidemanDatabase
 import com.two17industries.rideman.data.RidemanSettings
+import com.two17industries.rideman.data.RideOrientation
 import com.two17industries.rideman.data.RideRepository
 import com.two17industries.rideman.data.SettingsStore
 import com.two17industries.rideman.core.Plan
@@ -242,5 +243,17 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
 
     fun saveSettings(updated: RidemanSettings) {
         viewModelScope.launch { settingsStore.save(updated) }
+    }
+
+    /**
+     * Flips the ride display between portrait and landscape and persists the choice.
+     *
+     * Sticky by design: the next ride opens in whatever orientation you last rode in, so a
+     * bar-mounted rider never has to correct it. The rotate button is the only control — this
+     * is deliberately not surfaced in Settings.
+     */
+    fun toggleRideOrientation() {
+        val current = settings.value
+        saveSettings(current.copy(rideOrientation = current.rideOrientation.flipped()))
     }
 }

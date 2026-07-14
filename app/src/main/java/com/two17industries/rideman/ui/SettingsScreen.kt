@@ -429,7 +429,7 @@ private fun OrderRow(
             checked = enabled,
             modifier = Modifier.clickable(onClick = onToggle),
             accent = Cyan,
-            size = 34.dp,
+            size = 40.dp,
             glyphSize = 16.sp,
         )
         Text(
@@ -448,7 +448,7 @@ private fun ArrowButton(glyph: String, enabled: Boolean, onClick: () -> Unit) {
     val tint = if (enabled) Cyan.copy(alpha = 0.9f) else Cyan.copy(alpha = 0.25f)
     Box(
         modifier = Modifier
-            .size(38.dp)
+            .size(44.dp)
             .border(
                 1.dp,
                 if (enabled) Cyan.copy(alpha = 0.35f) else Cyan.copy(alpha = 0.15f),

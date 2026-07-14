@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -41,6 +42,8 @@ import com.two17industries.rideman.ui.components.BackLabel
 import com.two17industries.rideman.ui.components.CheckSquare
 import com.two17industries.rideman.ui.components.HairLine
 import com.two17industries.rideman.ui.components.PromptLabel
+import com.two17industries.rideman.ui.components.TerminalButton
+import com.two17industries.rideman.ui.components.TerminalButtonStyle
 import com.two17industries.rideman.ui.components.glow
 import com.two17industries.rideman.ui.theme.BorderCyanDim
 import com.two17industries.rideman.ui.theme.Cyan
@@ -133,14 +136,21 @@ fun HistoryScreen(
                         selected = if (selected.size == rides.size) emptySet() else rides.map { it.id }.toSet()
                     },
                 )
-                Text(
-                    "✕ DELETE",
-                    color = if (selected.isEmpty()) Delete.copy(alpha = 0.35f) else Delete,
-                    style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.sp, letterSpacing = 1.2.sp),
-                    modifier = Modifier.clickable(enabled = selected.isNotEmpty()) {
-                        pendingDelete = rides.filter { it.id in selected }
-                    },
-                )
+                Box(
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .clickable(enabled = selected.isNotEmpty()) {
+                            pendingDelete = rides.filter { it.id in selected }
+                        }
+                        .padding(horizontal = 4.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "✕ DELETE",
+                        color = if (selected.isEmpty()) Delete.copy(alpha = 0.35f) else Delete,
+                        style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.sp, letterSpacing = 1.2.sp),
+                    )
+                }
             }
         }
 
@@ -293,19 +303,17 @@ private fun RideRow(
                         met,
                     )
                 }
-                DetailLine("time", formatHistoryDuration(ride.totalTimeMs), null)
+                DetailLine("time", Units.duration(ride.totalTimeMs), null)
                 DetailLine("avg speed", "${Units.speed(ride.avgSpeedMps, units).roundToInt()} ${Units.speedLabel(units)}", null)
                 if (planRide == null) {
                     DetailLine("max speed", "${Units.speed(ride.maxSpeedMps, units).roundToInt()} ${Units.speedLabel(units)}", null)
                 }
-                Text(
-                    "✕ DELETE RIDE",
-                    color = Delete,
-                    style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.sp, letterSpacing = 0.8.sp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 10.dp)
-                        .clickable(onClick = onDelete),
+                TerminalButton(
+                    text = "✕ DELETE RIDE",
+                    onClick = onDelete,
+                    accent = Delete,
+                    fontSize = 12.sp,
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                 )
             }
         }
@@ -325,7 +333,7 @@ private fun StravaChip(
         StravaUploadState.NONE -> return
         StravaUploadState.QUEUED -> "QUEUED"
         StravaUploadState.UPLOADING -> "↑ UPLOADING"
-        StravaUploadState.UPLOADED -> "✓ Strava"
+        StravaUploadState.UPLOADED -> "✓ STRAVA"
         StravaUploadState.FAILED -> "⚠ RETRY"
     }
     val clickModifier = when {
@@ -364,15 +372,6 @@ private fun DetailLine(label: String, value: String, met: Boolean?) {
 private val HISTORY_DATE_FMT = SimpleDateFormat("MMM d · h:mm a", Locale.US)
 
 private fun formatDate(epochMillis: Long): String = HISTORY_DATE_FMT.format(Date(epochMillis))
-
-private fun formatHistoryDuration(ms: Long): String {
-    val totalSec = ms / 1000
-    val h = totalSec / 3600
-    val m = (totalSec % 3600) / 60
-    val s = totalSec % 60
-    return if (h > 0) String.format(Locale.US, "%d:%02d:%02d", h, m, s)
-    else String.format(Locale.US, "%d:%02d", m, s)
-}
 
 @Composable
 private fun ConfirmDeleteDialog(

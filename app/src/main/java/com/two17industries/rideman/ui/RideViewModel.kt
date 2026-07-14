@@ -9,7 +9,6 @@ import com.two17industries.rideman.core.RideSummary
 import com.two17industries.rideman.core.RideTracker
 import com.two17industries.rideman.data.RidemanDatabase
 import com.two17industries.rideman.data.RidemanSettings
-import com.two17industries.rideman.data.RideOrientation
 import com.two17industries.rideman.data.RideRepository
 import com.two17industries.rideman.data.SettingsStore
 import com.two17industries.rideman.core.Plan
@@ -151,6 +150,7 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startRide(planRideId: String? = null) {
         activePlanRideId = planRideId
+        _ui.value = RideUiState()
         collectorJobs.forEach { it.cancel() }
         collectorJobs.clear()
         startMillis = System.currentTimeMillis()

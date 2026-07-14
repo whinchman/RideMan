@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
@@ -89,6 +90,12 @@ enum class TerminalButtonStyle { PRIMARY, SECONDARY }
 /**
  * Sharp, hairline-bordered button. PRIMARY carries a faint accent fill and a glow; SECONDARY is a
  * bare outline. Text is centred when [trailing] is null, otherwise pushed apart from it.
+ *
+ * `heightIn(min = 48.dp)` floors the button at Android's minimum touch target regardless of
+ * [fontSize] — small instances (e.g. 12sp) would otherwise come out under 48dp from padding +
+ * line height alone. It sits before `border`/`background` so the border and fill actually grow to
+ * fill the floor (not just an invisible touch-target margin), and `verticalAlignment =
+ * Alignment.CenterVertically` on the Row keeps content centred once that floor kicks in.
  */
 @Composable
 fun TerminalButton(
@@ -115,6 +122,7 @@ fun TerminalButton(
 
     Row(
         modifier = modifier
+            .heightIn(min = 48.dp)
             .border(1.dp, borderColor, RectangleShape)
             .background(fill, RectangleShape)
             .clickable(enabled = enabled, onClick = onClick)

@@ -172,8 +172,7 @@ private fun RideHeader(onToggleOrientation: () -> Unit, accent: Color) {
  * must always offer at least a 48dp touch target even when the visible border is smaller
  * (portrait's 30dp square). `minimumInteractiveComponentSize()` expands the touch target
  * without inflating the visible border; `contentPadding` is applied inside the border/clickable
- * (matching `EndButton`'s ordering below) so it grows the visible box rather than becoming
- * outer margin.
+ * so it grows the visible box rather than becoming outer margin.
  */
 @Composable
 private fun RotateButton(

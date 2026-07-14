@@ -24,4 +24,9 @@ data class TrackPointEntity(
     val altitudeM: Double?,
     val speedMps: Float,
     val headingDeg: Float,
+    /**
+     * Horizontal accuracy in metres, or null if the fix carried none (and null for every point
+     * recorded before schema v4, which never captured it).
+     */
+    val accuracyM: Float? = null,
 )

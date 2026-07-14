@@ -177,7 +177,7 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             _ui.value = _ui.value.copy(
-                speedMps = sample.speedMps,
+                speedMps = sample.speedMps ?: 0f,
                 distanceM = t.distanceM,
                 headingDeg = sample.headingDeg,
                 altitudeM = displayedAltitude(),

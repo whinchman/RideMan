@@ -44,9 +44,12 @@ class LocationForegroundService : Service() {
                     epochMillis = loc.time,
                     lat = loc.latitude,
                     lng = loc.longitude,
-                    speedMps = if (loc.hasSpeed()) loc.speed else 0f,
+                    // null (not 0f) when the fix carries no Doppler speed — RideTracker treats
+                    // unknown speed as "not stationary", so a speed-less fix is never gated out.
+                    speedMps = if (loc.hasSpeed()) loc.speed else null,
                     headingDeg = if (loc.hasBearing()) loc.bearing else 0f,
                     gpsAltitudeM = if (loc.hasAltitude()) loc.altitude else null,
+                    accuracyM = if (loc.hasAccuracy()) loc.accuracy else null,
                 )
             )
         }

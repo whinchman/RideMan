@@ -9,10 +9,12 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,6 +24,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -158,17 +161,32 @@ private fun RideHeader(onToggleOrientation: () -> Unit, accent: Color) {
                 modifier = Modifier.size(30.dp),
             )
         }
-        Box(Modifier.fillMaxWidth().padding(bottom = 1.dp).background(accent.copy(alpha = 0.10f)))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(accent.copy(alpha = 0.10f)))
     }
 }
 
-/** Sharp bordered square with the rotate glyph. The only control for ride orientation. */
+/**
+ * Sharp bordered square with the rotate glyph. The only control for ride orientation, so it
+ * must always offer at least a 48dp touch target even when the visible border is smaller
+ * (portrait's 30dp square). `minimumInteractiveComponentSize()` expands the touch target
+ * without inflating the visible border; `contentPadding` is applied inside the border/clickable
+ * (matching `EndButton`'s ordering below) so it grows the visible box rather than becoming
+ * outer margin.
+ */
 @Composable
-private fun RotateButton(onClick: () -> Unit, accent: Color, modifier: Modifier = Modifier) {
+private fun RotateButton(
+    onClick: () -> Unit,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+) {
     Box(
-        modifier = modifier
+        modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .then(modifier)
             .border(1.dp, accent.copy(alpha = 0.35f), Sharp)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .padding(contentPadding),
         contentAlignment = Alignment.Center,
     ) {
         Text("⟳", color = accent, fontSize = 16.sp, textAlign = TextAlign.Center)
@@ -224,7 +242,8 @@ private fun SideRail(
         RotateButton(
             onClick = onToggleOrientation,
             accent = accent,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 9.dp),
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(vertical = 9.dp),
         )
         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             PaginatorDots(count = count, currentIndex = currentIndex, accent = accent, vertical = true)

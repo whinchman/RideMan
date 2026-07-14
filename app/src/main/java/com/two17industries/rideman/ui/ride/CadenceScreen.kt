@@ -30,6 +30,7 @@ import com.two17industries.rideman.R
 import com.two17industries.rideman.core.Cadence
 import com.two17industries.rideman.core.CadenceMode
 import com.two17industries.rideman.ui.theme.LocalAccent
+import com.two17industries.rideman.ui.theme.bigMetric
 import kotlinx.coroutines.delay
 
 @Composable
@@ -72,7 +73,7 @@ fun CadenceScreen(mode: CadenceMode, initialRpm: Int) {
         verticalArrangement = Arrangement.Center,
     ) {
         Text("CADENCE", color = accent, style = MaterialTheme.typography.labelLarge)
-        Text("$rpm", color = accent, style = MaterialTheme.typography.displayLarge)
+        Text("$rpm", color = accent, style = bigMetric)
         Text("TARGET RPM", color = accent, style = MaterialTheme.typography.titleLarge)
         Row(
             Modifier.fillMaxWidth().padding(top = 24.dp),

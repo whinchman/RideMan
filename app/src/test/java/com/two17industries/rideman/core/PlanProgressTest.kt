@@ -20,8 +20,8 @@ class PlanProgressTest {
         tolerancePercent = 5,
     )
 
-    private fun attempt(id: String, miles: Double) =
-        PlanAttempt(id, miles * PlanGrading.METERS_PER_MILE)
+    private fun attempt(id: String, miles: Double, rideId: Long = 0L) =
+        PlanAttempt(rideId, id, miles * PlanGrading.METERS_PER_MILE)
 
     @Test fun ride_at_target_is_met() {
         assertTrue(PlanGrading.isMet(plan.rides[0], 7.0 * PlanGrading.METERS_PER_MILE, 5))
@@ -65,5 +65,39 @@ class PlanProgressTest {
     @Test fun unknown_plan_ride_id_is_not_complete() {
         val p = PlanProgress(plan, listOf(attempt("w9Z", 99.0)))
         assertFalse(p.isComplete("w9Z"))
+    }
+
+    @Test fun deleting_the_only_ride_that_met_a_slot_uncompletes_it() {
+        val attempts = listOf(attempt("w1B", 3.0, rideId = 1L))   // w1B target 3.0 mi -> met
+        val slots = slotsUncompletedBy(plan, attempts, setOf(1L))
+        assertEquals(listOf("w1B"), slots.map { it.id })
+    }
+
+    @Test fun deleting_a_duplicate_attempt_leaves_the_slot_complete() {
+        val attempts = listOf(
+            attempt("w1B", 3.0, rideId = 1L),
+            attempt("w1B", 3.5, rideId = 2L),
+        )
+        // Ride 2 is deleted, but ride 1 still meets w1B -> no warning.
+        assertTrue(slotsUncompletedBy(plan, attempts, setOf(2L)).isEmpty())
+    }
+
+    @Test fun deleting_an_attempt_that_never_met_the_target_uncompletes_nothing() {
+        val attempts = listOf(attempt("w1C", 1.0, rideId = 3L))   // w1C target 10.0 mi -> not met
+        assertTrue(slotsUncompletedBy(plan, attempts, setOf(3L)).isEmpty())
+    }
+
+    @Test fun deleting_several_rides_lists_every_slot_they_uncomplete() {
+        val attempts = listOf(
+            attempt("w1A", 7.0, rideId = 1L),
+            attempt("w1B", 3.0, rideId = 2L),
+        )
+        val slots = slotsUncompletedBy(plan, attempts, setOf(1L, 2L))
+        assertEquals(listOf("w1A", "w1B"), slots.map { it.id })
+    }
+
+    @Test fun deleting_nothing_uncompletes_nothing() {
+        val attempts = listOf(attempt("w1A", 7.0, rideId = 1L))
+        assertTrue(slotsUncompletedBy(plan, attempts, emptySet()).isEmpty())
     }
 }

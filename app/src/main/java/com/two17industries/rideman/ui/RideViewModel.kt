@@ -110,7 +110,7 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
             .map { rides ->
                 plan?.let { p ->
                     PlanProgress(p, rides.mapNotNull { r ->
-                        r.planRideId?.let { PlanAttempt(it, r.distanceM) }
+                        r.planRideId?.let { PlanAttempt(r.id, it, r.distanceM) }
                     })
                 }
             }

@@ -16,9 +16,9 @@ fun RidemanTheme(theme: ThemeChoice, content: @Composable () -> Unit) {
         primary = accent,
         onPrimary = Background,
         background = Background,
-        onBackground = accent,
+        onBackground = TextPrimary,
         surface = Background,
-        onSurface = accent,
+        onSurface = TextPrimary,
     )
     CompositionLocalProvider(LocalAccent provides accent) {
         MaterialTheme(colorScheme = scheme, typography = RidemanTypography, content = content)

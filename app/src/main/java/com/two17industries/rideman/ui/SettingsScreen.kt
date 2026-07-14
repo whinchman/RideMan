@@ -414,6 +414,7 @@ private fun ArrowButton(glyph: String, enabled: Boolean, accent: Color, onClick:
 }
 
 private fun screenName(screen: RideScreen): String = when (screen) {
+    RideScreen.GRID -> "Dash"
     RideScreen.SPEED -> "Speed"
     RideScreen.ODOMETER -> "Odometer"
     RideScreen.COMPASS -> "Compass"

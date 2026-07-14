@@ -1,7 +1,7 @@
 package com.two17industries.rideman.core
 
-/** One ride that was tagged to a plan slot. distanceM is the ride's total distance in meters. */
-data class PlanAttempt(val planRideId: String, val distanceM: Double)
+/** One ride that was tagged to a plan slot. [rideId] is the RideEntity id; distanceM is in meters. */
+data class PlanAttempt(val rideId: Long, val planRideId: String, val distanceM: Double)
 
 /** Distance-target grading for a plan ride. */
 object PlanGrading {
@@ -40,4 +40,24 @@ class PlanProgress(private val plan: Plan, attempts: List<PlanAttempt>) {
     fun completedCount(): Int = plan.rides.count { isComplete(it.id) }
 
     val total: Int get() = plan.rides.size
+}
+
+/**
+ * Plan slots that are complete now but would NOT be if [deletedRideIds] were removed.
+ *
+ * Progress is derived from the rides that exist, so deleting a ride can silently rewind a plan.
+ * Returns empty when another ride still satisfies the slot — a duplicate attempt is not a
+ * consequence, and warning about it would cry wolf.
+ *
+ * Pure: no Android, no DB.
+ */
+fun slotsUncompletedBy(
+    plan: Plan,
+    attempts: List<PlanAttempt>,
+    deletedRideIds: Set<Long>,
+): List<PlanRide> {
+    if (deletedRideIds.isEmpty()) return emptyList()
+    val before = PlanProgress(plan, attempts)
+    val after = PlanProgress(plan, attempts.filterNot { it.rideId in deletedRideIds })
+    return plan.rides.filter { before.isComplete(it.id) && !after.isComplete(it.id) }
 }

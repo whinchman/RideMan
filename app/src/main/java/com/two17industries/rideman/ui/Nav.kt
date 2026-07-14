@@ -90,6 +90,7 @@ fun RidemanNav(vm: RideViewModel, onRideActiveChanged: (Boolean) -> Unit) {
                 },
                 stravaConnected = stravaConnected,
                 onBackfill = { dest = Dest.BACKFILL },
+                onDeleteRides = { vm.deleteRides(it) },
             )
         }
         Dest.BACKFILL -> {

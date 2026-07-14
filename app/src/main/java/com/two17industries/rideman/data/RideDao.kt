@@ -46,4 +46,11 @@ interface RideDao {
         externalId: String?,
         error: String?,
     )
+
+    /**
+     * Deletes rides and — via TrackPointEntity's ON DELETE CASCADE — their track points.
+     * One statement, so a bulk delete is atomic rather than N separate deletes.
+     */
+    @Query("DELETE FROM rides WHERE id IN (:rideIds)")
+    suspend fun deleteRides(rideIds: List<Long>)
 }

@@ -104,6 +104,12 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
     val allRides: StateFlow<List<RideEntity>> =
         repo.allRides().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /** Deletes rides and their GPS tracks. History and plan progress recompute from their Flows. */
+    fun deleteRides(rideIds: List<Long>) {
+        if (rideIds.isEmpty()) return
+        viewModelScope.launch { repo.deleteRides(rideIds) }
+    }
+
     /** Derived plan progress, or null if there is no loaded plan. */
     val progress: StateFlow<PlanProgress?> =
         repo.planTaggedRides()

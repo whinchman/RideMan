@@ -110,6 +110,7 @@ fun RidemanNav(vm: RideViewModel, onRideActiveChanged: (Boolean) -> Unit) {
                 state = ui,
                 settings = settings,
                 onEndRide = { lastSummary = vm.endRide(); dest = Dest.END },
+                onToggleOrientation = { vm.toggleRideOrientation() },
             )
         }
         Dest.END -> {

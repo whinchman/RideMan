@@ -67,7 +67,9 @@ fun RidemanNav(vm: RideViewModel, onRideActiveChanged: (Boolean) -> Unit) {
                 stravaConnected = stravaConnected,
                 stravaAthleteName = stravaAthleteName,
                 onConnectStrava = {
-                    com.two17industries.rideman.strava.CustomTabLauncher.launch(context, vm.connectStravaUrl())
+                    // Implicit intent, not a Custom Tab: the flow ends on a rideman:// redirect,
+                    // which a browser tab cannot follow.
+                    com.two17industries.rideman.strava.StravaAuthorizeLauncher.launch(context, vm.connectStravaUrl())
                 },
                 onDisconnectStrava = { vm.disconnectStrava() },
                 onSave = { vm.saveSettings(it) },

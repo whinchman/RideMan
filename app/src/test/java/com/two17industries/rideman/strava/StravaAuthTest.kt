@@ -2,6 +2,7 @@ package com.two17industries.rideman.strava
 
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -41,11 +42,27 @@ class StravaAuthTest {
     @Test fun authorize_url_contains_client_id_scope_and_redirect() {
         val a = auth(FakeHttp(), MemStore()) { 0 }
         val url = a.authorizeUrl()
-        assertTrue(url.startsWith("https://www.strava.com/oauth/authorize"))
+        assertTrue(url.startsWith("https://www.strava.com/oauth/mobile/authorize"))
         assertTrue(url.contains("client_id=CID"))
         assertTrue(url.contains("redirect_uri=rideman%3A%2F%2Fstrava-callback"))
         assertTrue(url.contains("scope=activity%3Awrite%2Cread"))
         assertTrue(url.contains("response_type=code"))
+    }
+
+    /**
+     * The *web* endpoint (/oauth/authorize) will not redirect to a custom scheme: it authorises
+     * fine and then strands the user in the browser, because `rideman://` is not a protocol a
+     * browser will follow. Android must use the mobile endpoint. Observed on-device 2026-07-14:
+     * "I authorized, but it never came back."
+     */
+    @Test fun authorize_url_is_the_mobile_endpoint_not_the_web_one() {
+        val a = auth(FakeHttp(), MemStore()) { 0 }
+        val url = a.authorizeUrl()
+        assertTrue("must use /oauth/mobile/authorize", url.contains("/oauth/mobile/authorize"))
+        assertFalse(
+            "must NOT use the web /oauth/authorize — it cannot redirect to rideman://",
+            url.substringBefore('?').endsWith("/oauth/authorize"),
+        )
     }
 
     @Test fun exchange_code_stores_tokens_and_name() = runTest {

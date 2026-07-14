@@ -60,6 +60,14 @@ fun HistoryScreen(
     // Rides staged for deletion; non-empty means the confirm dialog is showing.
     var pendingDelete by remember { mutableStateOf<List<RideEntity>>(emptyList()) }
 
+    var selectionMode by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf<Set<Long>>(emptySet()) }
+
+    fun exitSelection() {
+        selectionMode = false
+        selected = emptySet()
+    }
+
     if (pendingDelete.isNotEmpty()) {
         ConfirmDeleteDialog(
             rides = pendingDelete,
@@ -71,17 +79,63 @@ fun HistoryScreen(
             onConfirm = {
                 onDeleteRides(pendingDelete.map { it.id })
                 pendingDelete = emptyList()
+                exitSelection()
             },
         )
     }
 
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
-        Text(
-            "◀ HISTORY",
-            color = accent,
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.clickable(onClick = onBack).padding(bottom = 12.dp),
-        )
+        if (!selectionMode) {
+            Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(
+                    "◀ HISTORY",
+                    color = accent,
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.clickable(onClick = onBack),
+                )
+                if (rides.isNotEmpty()) {
+                    Text(
+                        "SELECT",
+                        color = accent,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.clickable { selectionMode = true },
+                    )
+                }
+            }
+        } else {
+            Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(
+                    "◀ CANCEL",
+                    color = accent,
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.clickable { exitSelection() },
+                )
+                Text(
+                    "${selected.size} selected",
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Text(
+                    if (selected.size == rides.size) "NONE" else "ALL",
+                    color = accent,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.clickable {
+                        selected = if (selected.size == rides.size) emptySet() else rides.map { it.id }.toSet()
+                    },
+                )
+                Text(
+                    "🗑 DELETE",
+                    color = if (selected.isEmpty()) Color(0xFFFF5252).copy(alpha = 0.35f) else Color(0xFFFF5252),
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.clickable(enabled = selected.isNotEmpty()) {
+                        pendingDelete = rides.filter { it.id in selected }
+                    },
+                )
+            }
+        }
 
         if (stravaConnected) {
             Text(
@@ -103,11 +157,19 @@ fun HistoryScreen(
                     plan = plan,
                     units = units,
                     accent = accent,
-                    expanded = ride.id == expandedId,
-                    onToggle = { expandedId = if (expandedId == ride.id) null else ride.id },
+                    selectionMode = selectionMode,
+                    checked = ride.id in selected,
+                    expanded = !selectionMode && ride.id == expandedId,
+                    onToggle = {
+                        if (selectionMode) {
+                            selected = if (ride.id in selected) selected - ride.id else selected + ride.id
+                        } else {
+                            expandedId = if (expandedId == ride.id) null else ride.id
+                        }
+                    },
+                    onDelete = { pendingDelete = listOf(ride) },
                     onRetryUpload = onRetryUpload,
                     onOpenActivity = onOpenActivity,
-                    onDelete = { pendingDelete = listOf(ride) },
                 )
             }
         }
@@ -140,6 +202,8 @@ private fun RideRow(
     plan: Plan?,
     units: UnitSystem,
     accent: Color,
+    selectionMode: Boolean,
+    checked: Boolean,
     expanded: Boolean,
     onToggle: () -> Unit,
     onRetryUpload: (Long) -> Unit,
@@ -161,7 +225,16 @@ private fun RideRow(
     ) {
         Column {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(formatDate(ride.startedAt), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), style = MaterialTheme.typography.bodyLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (selectionMode) {
+                        Text(
+                            if (checked) "☑" else "☐",
+                            color = accent,
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    }
+                    Text(formatDate(ride.startedAt), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), style = MaterialTheme.typography.bodyLarge)
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     StravaChip(
                         state = ride.stravaState,

@@ -59,7 +59,7 @@ fun AltimeterScreen(altitudeM: Double, units: UnitSystem) {
     BigMetric("ALTITUDE", v.roundToInt().toString(), Units.altitudeLabel(units))
 }
 
-private fun cardinal(deg: Float): String {
+internal fun cardinal(deg: Float): String {
     val dirs = listOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
     val idx = (((deg % 360f) + 360f) % 360f / 45f).roundToInt() % 8
     return dirs[idx]

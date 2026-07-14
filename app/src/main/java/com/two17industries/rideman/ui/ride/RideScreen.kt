@@ -74,12 +74,12 @@ fun RideScreen(state: RideUiState, settings: RidemanSettings, onEndRide: () -> U
 
         if (landscape) {
             Row(Modifier.fillMaxSize()) {
-                RidePager(pagerState, screens, count, state, settings, Modifier.weight(1f).fillMaxHeight())
+                RidePager(pagerState, screens, count, state, settings, true, Modifier.weight(1f).fillMaxHeight())
                 SideRail(count = count, currentIndex = currentIndex, onEndRide = onEndRide, accent = accent)
             }
         } else {
             Column(Modifier.fillMaxSize()) {
-                RidePager(pagerState, screens, count, state, settings, Modifier.weight(1f).fillMaxWidth())
+                RidePager(pagerState, screens, count, state, settings, false, Modifier.weight(1f).fillMaxWidth())
                 BottomBar(count = count, currentIndex = currentIndex, onEndRide = onEndRide, accent = accent)
             }
         }
@@ -93,10 +93,12 @@ private fun RidePager(
     count: Int,
     state: RideUiState,
     settings: RidemanSettings,
+    landscape: Boolean,
     modifier: Modifier = Modifier,
 ) {
     HorizontalPager(state = pagerState, modifier = modifier) { page ->
         when (screens[PagerWrap.screenIndex(page, count)]) {
+            RideScreen.GRID -> DashGridScreen(state, settings.units, landscape)
             RideScreen.SPEED -> SpeedometerScreen(state.speedMps, settings.units)
             RideScreen.ODOMETER -> OdometerScreen(state.distanceM, settings.units)
             RideScreen.COMPASS -> CompassScreen(state.headingDeg)

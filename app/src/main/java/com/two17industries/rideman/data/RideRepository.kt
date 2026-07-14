@@ -32,8 +32,9 @@ class RideRepository(private val dao: RideDao) {
                 lat = it.lat,
                 lng = it.lng,
                 altitudeM = it.gpsAltitudeM,
-                speedMps = it.speedMps,
+                speedMps = it.speedMps ?: 0f,
                 headingDeg = it.headingDeg,
+                accuracyM = it.accuracyM,
             )
         }
         return dao.insertRideWithTrack(ride, points)

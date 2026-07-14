@@ -8,7 +8,7 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [RideEntity::class, TrackPointEntity::class], version = 3, exportSchema = false)
+@Database(entities = [RideEntity::class, TrackPointEntity::class], version = 4, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class RidemanDatabase : RoomDatabase() {
     abstract fun rideDao(): RideDao
@@ -33,13 +33,24 @@ abstract class RidemanDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds per-fix GPS horizontal accuracy. Nullable: fixes recorded before v4 never captured
+         * it, so their accuracy is unrecoverable and stays null.
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE track_points ADD COLUMN accuracyM REAL")
+            }
+        }
+
         fun get(context: Context): RidemanDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     RidemanDatabase::class.java,
                     "rideman.db",
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .build().also { instance = it }
             }
     }
 }

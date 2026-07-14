@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<meta name="design_doc_mode" content="canvas">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0a0a0a; }
+  a { color: #00ffff; text-decoration: none; }
+  a:hover { color: #ff00ff; }
+  @keyframes rm-blink { 0%,49%{opacity:1;} 50%,100%{opacity:0;} }
+</style>
+</helmet>
+
+<section style="display:flex;flex-direction:column;gap:56px;padding:56px 48px;font-family:'IBM Plex Mono',monospace;background:#0a0a0a;min-height:100vh">
+
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <div style="font-family:'Orbitron',sans-serif;font-weight:800;font-size:28px;letter-spacing:0.04em;color:#00ffff;text-shadow:0 0 8px rgba(0,255,255,0.6),0 0 22px rgba(0,255,255,0.28)"><span style="color:#888;font-family:'IBM Plex Mono',monospace;font-weight:400">&gt; </span>RIDEMAN <span style="color:#888;font-size:20px">/ 1A TERMINAL</span><span style="display:inline-block;width:0.5em;height:0.9em;background:#ff007f;margin-left:6px;vertical-align:-0.08em;box-shadow:0 0 8px rgba(255,0,127,0.6);animation:rm-blink 1s step-end infinite"></span></div>
+    <div style="font-size:13px;color:#888;max-width:820px;line-height:1.7">The full system in the chosen direction. Six screens in portrait; ride display and end summary also in landscape. Ride readouts carry their unit in the header; heading stacks degrees over cardinal in portrait. Ride display holds the selectable accent (cyan shown); every menu stays cyan.</div>
+  </div>
+
+  <!-- ==================== PORTRAIT ==================== -->
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:18px;letter-spacing:0.14em;color:#ff00ff;text-shadow:0 0 6px rgba(255,0,255,0.4)">&gt; PORTRAIT</div>
+    <div style="display:flex;gap:34px;flex-wrap:wrap">
+
+      <!-- START -->
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="width:320px;height:720px;background:#000;border:1px solid rgba(0,255,255,0.18);border-radius:30px;padding:7px;box-shadow:0 24px 60px rgba(0,0,0,0.6)">
+          <div style="width:100%;height:100%;background:#0a0a0a;border-radius:23px;overflow:hidden;display:flex;flex-direction:column;position:relative">
+            <div style="height:30px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:12px;color:rgba(224,224,224,0.85)"><span>2:00</span><span style="display:flex;align-items:center;gap:7px"><span style="letter-spacing:1px">LTE</span><svg width="20" height="11" viewBox="0 0 22 11"><rect x="0.5" y="0.5" width="18" height="10" rx="1.5" fill="none" stroke="#e0e0e0" stroke-opacity="0.7"></rect><rect x="2" y="2" width="13" height="7" fill="#e0e0e0"></rect><rect x="19" y="3.5" width="2" height="4" rx="1" fill="#e0e0e0" fill-opacity="0.7"></rect></svg></span></div>
+            <div style="flex:1;padding:24px 22px;display:flex;flex-direction:column;overflow:hidden">
+              <div style="font-family:'Orbitron',sans-serif;font-weight:800;font-size:26px;letter-spacing:0.03em;color:#00ffff;text-shadow:0 0 8px rgba(0,255,255,0.55),0 0 20px rgba(0,255,255,0.25)"><span style="color:#888;font-family:'IBM Plex Mono',monospace;font-weight:400">&gt; </span>RIDEMAN<span style="display:inline-block;width:0.42em;height:0.85em;background:#ff007f;margin-left:5px;vertical-align:-0.05em;box-shadow:0 0 8px rgba(255,0,127,0.6);animation:rm-blink 1s step-end infinite"></span></div>
+              <div style="height:1px;background:rgba(0,255,255,0.1);margin:18px 0"></div>
+              <div style="border:1px solid rgba(0,255,255,0.2);padding:14px 16px">
+                <div style="font-size:11px;letter-spacing:0.14em;color:#888">&gt; NEXT UP</div>
+                <div style="font-family:'Orbitron',sans-serif;font-weight:600;font-size:17px;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.4);margin-top:9px;letter-spacing:0.04em">WK 4 · RIDE B</div>
+                <div style="font-size:13px;color:#e0e0e0;margin-top:5px">4 MI - endurance · <span style="color:#888">easy</span></div>
+              </div>
+              <div style="flex:1"></div>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <div style="border:1px solid #00ffff;background:rgba(0,255,255,0.1);box-shadow:inset 0 0 0 1px rgba(0,255,255,0.25),0 0 14px rgba(0,255,255,0.12);padding:15px 16px;display:flex;justify-content:space-between;align-items:center"><span style="font-family:'Orbitron',sans-serif;font-weight:600;font-size:15px;letter-spacing:0.06em;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.4)">&gt; PLAN RIDE</span><span style="color:#00ffff;font-size:16px">→</span></div>
+                <div style="border:1px solid rgba(0,255,255,0.25);padding:14px 16px;display:flex;justify-content:space-between;align-items:center"><span style="font-family:'Orbitron',sans-serif;font-weight:500;font-size:14px;letter-spacing:0.06em;color:#00ffff">&gt; FREE RIDE</span><span style="color:#888;font-size:15px">→</span></div>
+                <div style="display:flex;gap:10px">
+                  <div style="flex:1;border:1px solid rgba(0,255,255,0.25);padding:13px;text-align:center;font-family:'Orbitron',sans-serif;font-weight:500;font-size:12px;letter-spacing:0.08em;color:#00ffff">HISTORY</div>
+                  <div style="flex:1;border:1px solid rgba(0,255,255,0.25);padding:13px;text-align:center;font-family:'Orbitron',sans-serif;font-weight:500;font-size:12px;letter-spacing:0.08em;color:#00ffff">SETTINGS</div>
+                </div>
+              </div>
+              <div style="margin-top:18px;font-size:11px;color:#4a4a4a">v0.1.0 (build 1) · ba3cb5c</div>
+            </div>
+            <div style="height:22px;flex:none;display:flex;align-items:center;justify-content:center"><div style="width:110px;height:4px;border-radius:2px;background:rgba(224,224,224,0.45)"></div></div>
+          </div>
+        </div>
+        <div style="text-align:center;font-size:12px;color:#888;letter-spacing:0.12em">START</div>
+      </div>
+
+      <!-- PLAN PICKER -->
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="width:320px;height:720px;background:#000;border:1px solid rgba(0,255,255,0.18);border-radius:30px;padding:7px;box-shadow:0 24px 60px rgba(0,0,0,0.6)">
+          <div style="width:100%;height:100%;background:#0a0a0a;border-radius:23px;overflow:hidden;display:flex;flex-direction:column;position:relative">
+            <div style="height:30px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:12px;color:rgba(224,224,224,0.85)"><span>2:00</span><span style="display:flex;align-items:center;gap:7px"><span style="letter-spacing:1px">LTE</span><svg width="20" height="11" viewBox="0 0 22 11"><rect x="0.5" y="0.5" width="18" height="10" rx="1.5" fill="none" stroke="#e0e0e0" stroke-opacity="0.7"></rect><rect x="2" y="2" width="13" height="7" fill="#e0e0e0"></rect><rect x="19" y="3.5" width="2" height="4" rx="1" fill="#e0e0e0" fill-opacity="0.7"></rect></svg></span></div>
+            <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+              <div style="padding:16px 18px 12px"><span style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:18px;letter-spacing:0.04em;color:#00ffff;text-shadow:0 0 6px rgba(0,255,255,0.45)"><span style="color:#888;font-family:'IBM Plex Mono',monospace;font-weight:400">◀ </span>14-WEEK PLAN</span></div>
+              <div style="flex:1;overflow:hidden;padding:0 18px;display:flex;flex-direction:column;gap:8px">
+                <div style="font-size:10px;letter-spacing:0.16em;color:#888">&gt; PHASE 1 · BUILD THE BASE</div>
+                <div style="font-size:12px;color:#4a4a4a;margin-top:2px">Week 1</div>
+                <div style="display:flex;align-items:center;gap:11px"><span style="width:18px;height:18px;background:#00ffff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#0a0a0a">✓</span><span style="flex:1;font-size:13px;color:#555">Ride A · easy</span><span style="font-size:13px;color:#00ffff;opacity:0.5">2 MI</span></div>
+                <div style="display:flex;align-items:center;gap:11px"><span style="width:18px;height:18px;background:#00ffff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#0a0a0a">✓</span><span style="flex:1;font-size:13px;color:#555">Ride B · endurance</span><span style="font-size:13px;color:#00ffff;opacity:0.5">3 MI</span></div>
+                <div style="font-size:12px;color:#4a4a4a;margin-top:4px">Week 4 (recovery)</div>
+                <div style="border:1px solid #00ffff;background:rgba(0,255,255,0.06);padding:14px;display:flex;flex-direction:column;gap:10px;box-shadow:0 0 14px rgba(0,255,255,0.1)">
+                  <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-family:'Orbitron',sans-serif;font-weight:600;font-size:13px;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.35)">WK 4 · RIDE B - endurance</span></div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid rgba(0,255,255,0.12);padding-top:9px"><span style="font-size:10px;letter-spacing:0.12em;color:#888">TARGET</span><span style="font-family:'Orbitron',sans-serif;font-weight:800;font-size:26px;color:#00ffff;text-shadow:0 0 6px rgba(0,255,255,0.4)">4 MI</span></div>
+                  <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;letter-spacing:0.12em;color:#888">PACE</span><span style="font-size:14px;color:#00ffff">easy</span></div>
+                  <div style="font-size:12px;color:#888;line-height:1.5">Recovery week. Easy.</div>
+                  <div style="align-self:flex-start;background:#00ffff;color:#0a0a0a;padding:4px 9px;font-size:10px;font-weight:700;letter-spacing:0.06em">★ LONG RIDE</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:11px;opacity:0.9"><span style="width:18px;height:18px;border:1.5px solid rgba(0,255,255,0.5);display:flex;align-items:center;justify-content:center"></span><span style="flex:1;font-size:13px;color:#e0e0e0">Ride C · quality</span><span style="font-size:13px;color:#00ffff">3 MI</span></div>
+              </div>
+              <div style="padding:12px 18px 16px"><div style="border:1px solid #00ffff;background:rgba(0,255,255,0.12);box-shadow:0 0 14px rgba(0,255,255,0.15);padding:15px;text-align:center;font-family:'Orbitron',sans-serif;font-weight:700;font-size:16px;letter-spacing:0.1em;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.4)">START RIDE</div></div>
+            </div>
+            <div style="height:22px;flex:none;display:flex;align-items:center;justify-content:center"><div style="width:110px;height:4px;border-radius:2px;background:rgba(224,224,224,0.45)"></div></div>
+          </div>
+        </div>
+        <div style="text-align:center;font-size:12px;color:#888;letter-spacing:0.12em">PLAN PICKER</div>
+      </div>
+
+      <!-- RIDE (portrait, units in header, heading stacked) -->
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="width:320px;height:720px;background:#000;border:1px solid rgba(0,255,255,0.18);border-radius:30px;padding:7px;box-shadow:0 24px 60px rgba(0,0,0,0.6)">
+          <div style="width:100%;height:100%;background:#0a0a0a;border-radius:23px;overflow:hidden;display:flex;flex-direction:column;position:relative">
+            <div style="height:30px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:12px;color:rgba(224,224,224,0.85)"><span>2:00</span><span style="display:flex;align-items:center;gap:7px"><span style="letter-spacing:1px">LTE</span><svg width="20" height="11" viewBox="0 0 22 11"><rect x="0.5" y="0.5" width="18" height="10" rx="1.5" fill="none" stroke="#e0e0e0" stroke-opacity="0.7"></rect><rect x="2" y="2" width="13" height="7" fill="#e0e0e0"></rect><rect x="19" y="3.5" width="2" height="4" rx="1" fill="#e0e0e0" fill-opacity="0.7"></rect></svg></span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:13px 18px;border-bottom:1px solid rgba(0,255,255,0.1)">
+              <span style="font-size:11px;letter-spacing:0.14em;color:#888">&gt; RIDING</span>
+              <span style="border:1px solid rgba(0,255,255,0.35);width:30px;height:30px;display:flex;align-items:center;justify-content:center;color:#00ffff;font-size:16px;box-shadow:0 0 8px rgba(0,255,255,0.12)" title="Rotate portrait / landscape">⟳</span>
+            </div>
+            <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(0,255,255,0.12)">
+              <div style="background:#0a0a0a;padding:16px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:12px;min-width:0;overflow:hidden"><div style="font-size:11px;letter-spacing:0.11em;color:#888">SPEED <span style="color:#4a4a4a">· MPH</span></div><div style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:54px;line-height:0.82;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.45),0 0 16px rgba(0,255,255,0.2)">18</div></div>
+              <div style="background:#0a0a0a;padding:16px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:12px;min-width:0;overflow:hidden"><div style="font-size:11px;letter-spacing:0.11em;color:#888">DISTANCE <span style="color:#4a4a4a">· MI</span></div><div style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:40px;line-height:0.82;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.45),0 0 16px rgba(0,255,255,0.2)">3.24</div></div>
+              <div style="background:#0a0a0a;padding:16px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:12px;min-width:0;overflow:hidden"><div style="font-size:11px;letter-spacing:0.11em;color:#888">DURATION</div><div style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:38px;line-height:0.82;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.45),0 0 16px rgba(0,255,255,0.2)">24:18</div></div>
+              <div style="background:#0a0a0a;padding:16px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:12px;min-width:0;overflow:hidden"><div style="font-size:11px;letter-spacing:0.11em;color:#888">HEADING <span style="color:#4a4a4a">· DEG</span></div><div style="display:flex;flex-direction:column;line-height:0.82"><span style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:44px;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.45),0 0 16px rgba(0,255,255,0.2)">042°</span><span style="font-family:'Orbitron',sans-serif;font-weight:600;font-size:22px;color:#ff00ff;text-shadow:0 0 5px rgba(255,0,255,0.4);margin-top:6px">NE</span></div></div>
+            </div>
+            <div style="padding:16px 18px;display:flex;flex-direction:column;gap:14px">
+              <div style="display:flex;justify-content:center;gap:9px">
+                <span style="width:9px;height:9px;background:#00ffff;box-shadow:0 0 6px rgba(0,255,255,0.6)"></span>
+                <span style="width:7px;height:7px;background:rgba(0,255,255,0.3);align-self:center"></span>
+                <span style="width:7px;height:7px;background:rgba(0,255,255,0.3);align-self:center"></span>
+                <span style="width:7px;height:7px;background:rgba(0,255,255,0.3);align-self:center"></span>
+                <span style="width:7px;height:7px;background:rgba(0,255,255,0.3);align-self:center"></span>
+              </div>
+              <div style="border:1px solid #00ffff;background:rgba(0,255,255,0.12);box-shadow:0 0 14px rgba(0,255,255,0.15);padding:15px;text-align:center;font-family:'Orbitron',sans-serif;font-weight:700;font-size:16px;letter-spacing:0.1em;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.4)">END RIDE</div>
+            </div>
+            <div style="height:22px;flex:none;display:flex;align-items:center;justify-content:center"><div style="width:110px;height:4px;border-radius:2px;background:rgba(224,224,224,0.45)"></div></div>
+          </div>
+        </div>
+        <div style="text-align:center;font-size:12px;color:#888;letter-spacing:0.12em">RIDE · 2×2 GRID</div>
+      </div>
+
+      <!-- END -->
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="width:320px;height:720px;background:#000;border:1px solid rgba(0,255,255,0.18);border-radius:30px;padding:7px;box-shadow:0 24px 60px rgba(0,0,0,0.6)">
+          <div style="width:100%;height:100%;background:#0a0a0a;border-radius:23px;overflow:hidden;display:flex;flex-direction:column;position:relative">
+            <div style="height:30px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:12px;color:rgba(224,224,224,0.85)"><span>2:00</span><span style="display:flex;align-items:center;gap:7px"><span style="letter-spacing:1px">LTE</span><svg width="20" height="11" viewBox="0 0 22 11"><rect x="0.5" y="0.5" width="18" height="10" rx="1.5" fill="none" stroke="#e0e0e0" stroke-opacity="0.7"></rect><rect x="2" y="2" width="13" height="7" fill="#e0e0e0"></rect><rect x="19" y="3.5" width="2" height="4" rx="1" fill="#e0e0e0" fill-opacity="0.7"></rect></svg></span></div>
+            <div style="flex:1;padding:24px 20px;display:flex;flex-direction:column;gap:16px;overflow:hidden">
+              <div style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:20px;letter-spacing:0.06em;color:#00ffff;text-shadow:0 0 6px rgba(0,255,255,0.45);text-align:center">RIDE COMPLETE</div>
+              <div style="background:#00ffff;box-shadow:0 0 18px rgba(0,255,255,0.3);padding:13px;text-align:center;font-family:'Orbitron',sans-serif;font-weight:700;font-size:13px;letter-spacing:0.05em;color:#0a0a0a">✓ TARGET MET · SLOT COMPLETE</div>
+              <div style="text-align:center"><div style="font-size:10px;letter-spacing:0.14em;color:#888">DISTANCE</div><div style="font-family:'Orbitron',sans-serif;font-weight:600;font-size:17px;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.35);margin-top:5px">target 4.0 MI  →  4.12 MI</div></div>
+              <div style="display:flex;flex-direction:column;gap:1px;background:rgba(0,255,255,0.12);border:1px solid rgba(0,255,255,0.12)">
+                <div style="background:#0a0a0a;padding:13px 15px;display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-size:11px;letter-spacing:0.12em;color:#888;white-space:nowrap">TIME</span><span style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:20px;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.35);white-space:nowrap">24:18</span></div>
+                <div style="background:#0a0a0a;padding:13px 15px;display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-size:11px;letter-spacing:0.12em;color:#888;white-space:nowrap">MAX SPEED</span><span style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:20px;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.35);white-space:nowrap">21 MPH</span></div>
+                <div style="background:#0a0a0a;padding:13px 15px;display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-size:11px;letter-spacing:0.12em;color:#888;white-space:nowrap">AVG SPEED</span><span style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:20px;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.35);white-space:nowrap">12 MPH</span></div>
+              </div>
+              <div style="flex:1"></div>
+              <div style="border:1px solid #00ffff;background:rgba(0,255,255,0.12);box-shadow:0 0 14px rgba(0,255,255,0.15);padding:15px;text-align:center;font-family:'Orbitron',sans-serif;font-weight:700;font-size:16px;letter-spacing:0.12em;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.4)">DONE</div>
+            </div>
+            <div style="height:22px;flex:none;display:flex;align-items:center;justify-content:center"><div style="width:110px;height:4px;border-radius:2px;background:rgba(224,224,224,0.45)"></div></div>
+          </div>
+        </div>
+        <div style="text-align:center;font-size:12px;color:#888;letter-spacing:0.12em">END SUMMARY</div>
+      </div>
+
+      <!-- HISTORY -->
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="width:320px;height:720px;background:#000;border:1px solid rgba(0,255,255,0.18);border-radius:30px;padding:7px;box-shadow:0 24px 60px rgba(0,0,0,0.6)">
+          <div style="width:100%;height:100%;background:#0a0a0a;border-radius:23px;overflow:hidden;display:flex;flex-direction:column;position:relative">
+            <div style="height:30px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:12px;color:rgba(224,224,224,0.85)"><span>2:00</span><span style="display:flex;align-items:center;gap:7px"><span style="letter-spacing:1px">LTE</span><svg width="20" height="11" viewBox="0 0 22 11"><rect x="0.5" y="0.5" width="18" height="10" rx="1.5" fill="none" stroke="#e0e0e0" stroke-opacity="0.7"></rect><rect x="2" y="2" width="13" height="7" fill="#e0e0e0"></rect><rect x="19" y="3.5" width="2" height="4" rx="1" fill="#e0e0e0" fill-opacity="0.7"></rect></svg></span></div>
+            <div style="flex:1;padding:16px 18px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+              <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:18px;letter-spacing:0.04em;color:#00ffff;text-shadow:0 0 6px rgba(0,255,255,0.45)"><span style="color:#888;font-family:'IBM Plex Mono',monospace;font-weight:400">◀ </span>HISTORY</span><span style="font-size:12px;font-weight:700;letter-spacing:0.08em;color:#00ffff">SELECT</span></div>
+              <div style="font-size:12px;color:#00ffff;opacity:0.85">↑ Upload past rides to Strava</div>
+              <div style="border:1px solid rgba(0,255,255,0.12);background:rgba(0,255,255,0.05);padding:12px 14px"><div style="font-size:10px;letter-spacing:0.14em;color:#888">&gt; PLAN PROGRESS</div><div style="font-family:'Orbitron',sans-serif;font-weight:800;font-size:24px;color:#00ffff;text-shadow:0 0 6px rgba(0,255,255,0.4);margin-top:5px">10 / 42 rides</div></div>
+              <div style="border:1px solid rgba(0,255,255,0.35);background:rgba(0,255,255,0.06);padding:13px 14px;display:flex;flex-direction:column;gap:8px;box-shadow:0 0 12px rgba(0,255,255,0.08)">
+                <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;color:#888">Jul 13 · 8:28 PM</span><span style="display:flex;gap:9px;align-items:center"><span style="font-size:11px;color:#00ffff;font-weight:700">✓ Strava</span><span style="font-size:11px;color:#00ffff;font-weight:700;letter-spacing:0.06em">PLAN</span></span></div>
+                <div style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:15px;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.35)">WK 4 · RIDE A - 7.8 mi</div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;border-top:1px solid rgba(0,255,255,0.1);padding-top:7px"><span style="color:#888">target</span><span style="color:#00ffff;font-weight:700">2 MI ✓ met</span></div>
+                <div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:#888">time</span><span style="color:#e0e0e0;font-weight:700">1:00:10</span></div>
+                <div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:#888">avg speed</span><span style="color:#e0e0e0;font-weight:700">8 MPH</span></div>
+                <div style="font-size:12px;color:#ff5252;font-weight:700;margin-top:2px">✕ DELETE RIDE</div>
+              </div>
+              <div style="padding:2px 2px;display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;color:#888">Jul 10 · 9:25 PM</span><span style="display:flex;gap:9px;align-items:center"><span style="font-size:11px;color:#00ffff;font-weight:700">✓ Strava</span><span style="font-size:11px;color:#555;font-weight:700">FREE</span></span></div><div style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:15px;color:#e0e0e0">4.2 mi</div></div>
+              <div style="padding:2px 2px;display:flex;flex-direction:column;gap:4px;border-top:1px solid rgba(0,255,255,0.08);padding-top:10px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;color:#888">Jul 9 · 8:17 PM</span><span style="display:flex;gap:9px;align-items:center"><span style="font-size:11px;color:#00ffff;font-weight:700">✓ Strava</span><span style="font-size:11px;color:#00ffff;font-weight:700">PLAN</span></span></div><div style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:15px;color:#e0e0e0">Wk 3 · Ride C - 6.7 mi</div></div>
+            </div>
+            <div style="height:22px;flex:none;display:flex;align-items:center;justify-content:center"><div style="width:110px;height:4px;border-radius:2px;background:rgba(224,224,224,0.45)"></div></div>
+          </div>
+        </div>
+        <div style="text-align:center;font-size:12px;color:#888;letter-spacing:0.12em">HISTORY</div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="width:320px;height:720px;background:#000;border:1px solid rgba(0,255,255,0.18);border-radius:30px;padding:7px;box-shadow:0 24px 60px rgba(0,0,0,0.6)">
+          <div style="width:100%;height:100%;background:#0a0a0a;border-radius:23px;overflow:hidden;display:flex;flex-direction:column;position:relative">
+            <div style="height:30px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:12px;color:rgba(224,224,224,0.85)"><span>2:00</span><span style="display:flex;align-items:center;gap:7px"><span style="letter-spacing:1px">LTE</span><svg width="20" height="11" viewBox="0 0 22 11"><rect x="0.5" y="0.5" width="18" height="10" rx="1.5" fill="none" stroke="#e0e0e0" stroke-opacity="0.7"></rect><rect x="2" y="2" width="13" height="7" fill="#e0e0e0"></rect><rect x="19" y="3.5" width="2" height="4" rx="1" fill="#e0e0e0" fill-opacity="0.7"></rect></svg></span></div>
+            <div style="flex:1;padding:22px 20px;display:flex;flex-direction:column;gap:22px;overflow:hidden">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-family:'Orbitron',sans-serif;font-weight:800;font-size:24px;letter-spacing:0.03em;color:#00ffff;text-shadow:0 0 7px rgba(0,255,255,0.5)">SETTINGS</span>
+                <span style="border:1px solid rgba(0,255,255,0.4);padding:7px 14px;font-size:12px;font-weight:700;letter-spacing:0.06em;color:#00ffff">CANCEL</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:11px">
+                <div style="font-size:11px;font-weight:700;letter-spacing:0.16em;color:#00ffff;text-shadow:0 0 4px rgba(0,255,255,0.35)"><span style="color:#888;font-weight:400">&gt; </span>UNITS</div>
+                <div style="display:flex;gap:10px">
+                  <div style="flex:1;background:#00ffff;color:#0a0a0a;padding:12px;text-align:center;font-size:13px;font-weight:700">American</div>
+                  <div style="flex:1;border:1px solid rgba(0,255,255,0.3);color:#00ffff;padding:12px;text-align:center;font-size:13px;font-weight:500">Metric</div>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:11px">
+                <div style="font-size:11px;font-weight:700;letter-spacing:0.16em;color:#00ffff;text-shadow:0 0 4px rgba(0,255,255,0.35)"><span style="color:#888;font-weight:400">&gt; </span>CADENCE PULSE</div>
+                <div style="display:flex;gap:10px">
+                  <div style="flex:1;background:#00ffff;color:#0a0a0a;padding:12px;text-align:center;font-size:13px;font-weight:700">Same foot</div>
+                  <div style="flex:1;border:1px solid rgba(0,255,255,0.3);color:#00ffff;padding:12px;text-align:center;font-size:13px;font-weight:500">Alternating</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:14px;margin-top:4px">
+                  <div style="width:52px;height:52px;border:1px solid #00ffff;display:flex;align-items:center;justify-content:center;font-family:'Orbitron',sans-serif;font-size:26px;color:#00ffff">−</div>
+                  <div style="flex:1;text-align:center"><div style="font-family:'Orbitron',sans-serif;font-weight:800;font-size:34px;color:#00ffff;text-shadow:0 0 6px rgba(0,255,255,0.4);line-height:1">80</div><div style="font-size:11px;letter-spacing:0.14em;color:#888;margin-top:3px">TARGET RPM</div></div>
+                  <div style="width:52px;height:52px;border:1px solid #00ffff;display:flex;align-items:center;justify-content:center;font-family:'Orbitron',sans-serif;font-size:26px;color:#00ffff">+</div>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:11px">
+                <div style="font-size:11px;font-weight:700;letter-spacing:0.16em;color:#00ffff;text-shadow:0 0 4px rgba(0,255,255,0.35)"><span style="color:#888;font-weight:400">&gt; </span>COLOR THEME <span style="color:#4a4a4a;font-weight:400;letter-spacing:0">· drives ride display</span></div>
+                <div style="display:flex;gap:9px;flex-wrap:wrap">
+                  <div style="background:#FFC400;color:#000;padding:10px 14px;font-size:12px;font-weight:700">Amber</div>
+                  <div style="background:#39FF14;color:#000;padding:10px 14px;font-size:12px;font-weight:700">Acid Green</div>
+                  <div style="background:#00F0FF;color:#000;padding:10px 14px;font-size:12px;font-weight:700;box-shadow:0 0 0 2px #fff">Electric Cyan</div>
+                  <div style="background:#FF2D95;color:#000;padding:10px 14px;font-size:12px;font-weight:700">Hot Magenta</div>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:11px">
+                <div style="font-size:11px;font-weight:700;letter-spacing:0.16em;color:#00ffff;text-shadow:0 0 4px rgba(0,255,255,0.35)"><span style="color:#888;font-weight:400">&gt; </span>RIDE SCREENS <span style="color:#4a4a4a;font-weight:400;letter-spacing:0">· tap to enable · arrows reorder</span></div>
+                <div style="display:flex;align-items:center;gap:10px"><span style="width:34px;height:34px;background:#00ffff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#0a0a0a">✓</span><span style="flex:1;font-size:14px;font-weight:700;color:#00ffff">Speed</span><span style="width:38px;height:38px;border:1px solid rgba(0,255,255,0.35);display:flex;align-items:center;justify-content:center;color:#00ffff">▲</span><span style="width:38px;height:38px;border:1px solid rgba(0,255,255,0.35);display:flex;align-items:center;justify-content:center;color:#00ffff">▼</span></div>
+              </div>
+            </div>
+            <div style="height:22px;flex:none;display:flex;align-items:center;justify-content:center"><div style="width:110px;height:4px;border-radius:2px;background:rgba(224,224,224,0.45)"></div></div>
+          </div>
+        </div>
+        <div style="text-align:center;font-size:12px;color:#888;letter-spacing:0.12em">SETTINGS</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== LANDSCAPE ==================== -->
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:18px;letter-spacing:0.14em;color:#ff00ff;text-shadow:0 0 6px rgba(255,0,255,0.4)">&gt; LANDSCAPE</div>
+    <div style="display:flex;gap:40px;flex-wrap:wrap">
+
+      <!-- RIDE landscape: grid + side rail -->
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="width:720px;height:344px;background:#000;border:1px solid rgba(0,255,255,0.18);border-radius:26px;padding:7px;box-shadow:0 24px 60px rgba(0,0,0,0.6)">
+          <div style="width:100%;height:100%;background:#0a0a0a;border-radius:19px;overflow:hidden;display:flex;flex-direction:column;position:relative">
+            <div style="height:26px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:11px;color:rgba(224,224,224,0.85)"><span>2:00</span><span style="display:flex;align-items:center;gap:7px"><span style="letter-spacing:1px">LTE</span><svg width="20" height="11" viewBox="0 0 22 11"><rect x="0.5" y="0.5" width="18" height="10" rx="1.5" fill="none" stroke="#e0e0e0" stroke-opacity="0.7"></rect><rect x="2" y="2" width="13" height="7" fill="#e0e0e0"></rect><rect x="19" y="3.5" width="2" height="4" rx="1" fill="#e0e0e0" fill-opacity="0.7"></rect></svg></span></div>
+            <div style="flex:1;display:flex;overflow:hidden">
+              <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(0,255,255,0.12)">
+                <div style="background:#0a0a0a;padding:14px 18px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:12px;min-width:0;overflow:hidden"><div style="font-size:11px;letter-spacing:0.11em;color:#888">SPEED <span style="color:#4a4a4a">· MPH</span></div><div style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:56px;line-height:0.82;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.45),0 0 16px rgba(0,255,255,0.2)">18</div></div>
+                <div style="background:#0a0a0a;padding:14px 18px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:12px;min-width:0;overflow:hidden"><div style="font-size:11px;letter-spacing:0.11em;color:#888">DISTANCE <span style="color:#4a4a4a">· MI</span></div><div style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:48px;line-height:0.82;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.45),0 0 16px rgba(0,255,255,0.2)">3.24</div></div>
+                <div style="background:#0a0a0a;padding:14px 18px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:12px;min-width:0;overflow:hidden"><div style="font-size:11px;letter-spacing:0.11em;color:#888">DURATION</div><div style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:44px;line-height:0.82;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.45),0 0 16px rgba(0,255,255,0.2)">24:18</div></div>
+                <div style="background:#0a0a0a;padding:14px 18px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:12px;min-width:0;overflow:hidden"><div style="font-size:11px;letter-spacing:0.11em;color:#888">HEADING <span style="color:#4a4a4a">· DEG</span></div><div style="display:flex;align-items:baseline;gap:10px"><span style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:48px;line-height:0.82;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.45),0 0 16px rgba(0,255,255,0.2)">042°</span><span style="font-family:'Orbitron',sans-serif;font-weight:600;font-size:24px;color:#ff00ff;text-shadow:0 0 5px rgba(255,0,255,0.4)">NE</span></div></div>
+              </div>
+              <div style="width:96px;flex:none;border-left:1px solid rgba(0,255,255,0.12);display:flex;flex-direction:column;align-items:center;padding:14px 10px;gap:10px">
+                <div style="width:100%;border:1px solid rgba(0,255,255,0.35);padding:9px 6px;text-align:center;color:#00ffff;font-size:18px;box-shadow:0 0 8px rgba(0,255,255,0.12)" title="Rotate portrait / landscape">⟳</div>
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px">
+                  <span style="width:9px;height:9px;background:#00ffff;box-shadow:0 0 6px rgba(0,255,255,0.6)"></span>
+                  <span style="width:7px;height:7px;background:rgba(0,255,255,0.3)"></span>
+                  <span style="width:7px;height:7px;background:rgba(0,255,255,0.3)"></span>
+                  <span style="width:7px;height:7px;background:rgba(0,255,255,0.3)"></span>
+                  <span style="width:7px;height:7px;background:rgba(0,255,255,0.3)"></span>
+                </div>
+                <div style="width:100%;border:1px solid #00ffff;background:rgba(0,255,255,0.12);box-shadow:0 0 14px rgba(0,255,255,0.15);padding:14px 6px;text-align:center;font-family:'Orbitron',sans-serif;font-weight:700;font-size:15px;letter-spacing:0.08em;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.4)">END</div>
+              </div>
+            </div>
+            <div style="height:20px;flex:none;display:flex;align-items:center;justify-content:center"><div style="width:120px;height:4px;border-radius:2px;background:rgba(224,224,224,0.45)"></div></div>
+          </div>
+        </div>
+        <div style="text-align:center;font-size:12px;color:#888;letter-spacing:0.12em">RIDE · LANDSCAPE (grid + side rail)</div>
+      </div>
+
+      <!-- END landscape -->
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="width:720px;height:344px;background:#000;border:1px solid rgba(0,255,255,0.18);border-radius:26px;padding:7px;box-shadow:0 24px 60px rgba(0,0,0,0.6)">
+          <div style="width:100%;height:100%;background:#0a0a0a;border-radius:19px;overflow:hidden;display:flex;flex-direction:column;position:relative">
+            <div style="height:26px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:11px;color:rgba(224,224,224,0.85)"><span>2:00</span><span style="display:flex;align-items:center;gap:7px"><span style="letter-spacing:1px">LTE</span><svg width="20" height="11" viewBox="0 0 22 11"><rect x="0.5" y="0.5" width="18" height="10" rx="1.5" fill="none" stroke="#e0e0e0" stroke-opacity="0.7"></rect><rect x="2" y="2" width="13" height="7" fill="#e0e0e0"></rect><rect x="19" y="3.5" width="2" height="4" rx="1" fill="#e0e0e0" fill-opacity="0.7"></rect></svg></span></div>
+            <div style="flex:1;padding:16px 26px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:18px;letter-spacing:0.06em;color:#00ffff;text-shadow:0 0 6px rgba(0,255,255,0.45)">RIDE COMPLETE</span>
+                <span style="background:#00ffff;box-shadow:0 0 14px rgba(0,255,255,0.3);padding:8px 12px;font-family:'Orbitron',sans-serif;font-weight:700;font-size:11px;letter-spacing:0.05em;color:#0a0a0a">✓ TARGET MET</span>
+              </div>
+              <div style="flex:1;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1px;background:rgba(0,255,255,0.12);border:1px solid rgba(0,255,255,0.12)">
+                <div style="background:#0a0a0a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-width:0"><span style="font-size:10px;letter-spacing:0.12em;color:#888">TIME</span><span style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:30px;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.35)">24:18</span></div>
+                <div style="background:#0a0a0a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-width:0"><span style="font-size:10px;letter-spacing:0.12em;color:#888">DISTANCE</span><span style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:30px;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.35)">4.12</span></div>
+                <div style="background:#0a0a0a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-width:0"><span style="font-size:10px;letter-spacing:0.12em;color:#888">MAX SPEED</span><span style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:30px;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.35)">21</span></div>
+                <div style="background:#0a0a0a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-width:0"><span style="font-size:10px;letter-spacing:0.12em;color:#888">AVG SPEED</span><span style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:30px;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.35)">12</span></div>
+              </div>
+              <div style="border:1px solid #00ffff;background:rgba(0,255,255,0.12);box-shadow:0 0 14px rgba(0,255,255,0.15);padding:12px;text-align:center;font-family:'Orbitron',sans-serif;font-weight:700;font-size:15px;letter-spacing:0.12em;color:#00ffff;text-shadow:0 0 5px rgba(0,255,255,0.4)">DONE</div>
+            </div>
+            <div style="height:20px;flex:none;display:flex;align-items:center;justify-content:center"><div style="width:120px;height:4px;border-radius:2px;background:rgba(224,224,224,0.45)"></div></div>
+          </div>
+        </div>
+        <div style="text-align:center;font-size:12px;color:#888;letter-spacing:0.12em">END · LANDSCAPE</div>
+      </div>
+
+    </div>
+  </div>
+
+</section>
+</x-dc>
+</body>
+</html>

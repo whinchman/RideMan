@@ -107,6 +107,11 @@ fun TerminalButton(
     accent: Color = Cyan,
     trailing: String? = null,
     fontSize: TextUnit = 15.sp,
+    /**
+     * Inner horizontal padding. Narrow it for buttons in tight containers — at the default 16.dp,
+     * the ride screen's 96dp side rail leaves only ~44dp of content box and clips "END" to "EN".
+     */
+    horizontalPadding: Dp = 16.dp,
 ) {
     val primary = style == TerminalButtonStyle.PRIMARY
     val borderColor = when {
@@ -126,7 +131,7 @@ fun TerminalButton(
             .border(1.dp, borderColor, RectangleShape)
             .background(fill, RectangleShape)
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 15.dp),
+            .padding(horizontal = horizontalPadding, vertical = 15.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = if (trailing == null) Arrangement.Center else Arrangement.SpaceBetween,
     ) {

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
@@ -80,6 +81,9 @@ fun RideScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            // The app draws edge-to-edge; without this the ride header (and its rotate button)
+            // renders under the system status bar.
+            .safeDrawingPadding()
             .pointerInput(Unit) {
                 detectTapGestures(onDoubleTap = { speak(tts, currentState.value, currentUnits.value) })
             }
@@ -255,6 +259,8 @@ private fun SideRail(
             style = TerminalButtonStyle.PRIMARY,
             accent = accent,
             fontSize = 15.sp,
+            // The rail is only 96dp wide; the default 16dp padding clips "END" to "EN".
+            horizontalPadding = 6.dp,
             modifier = Modifier.fillMaxWidth(),
         )
     }

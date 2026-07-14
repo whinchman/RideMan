@@ -1,6 +1,7 @@
 package com.two17industries.rideman
 
 import android.Manifest
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -52,13 +53,19 @@ class MainActivity : ComponentActivity() {
         val settings by vm.settings.collectAsState()
         RidemanTheme(theme = settings.theme) {
             Surface(modifier = Modifier.fillMaxSize()) {
-                RidemanNav(vm = vm, onRideActiveChanged = ::keepScreenOn)
+                RidemanNav(vm = vm, onRideActiveChanged = ::onRideActive)
             }
         }
     }
 
-    private fun keepScreenOn(on: Boolean) {
-        if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    private fun onRideActive(active: Boolean) {
+        if (active) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            // Freeze whatever orientation the ride started in so a bump can't flip the display mid-glance.
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
     }
 }

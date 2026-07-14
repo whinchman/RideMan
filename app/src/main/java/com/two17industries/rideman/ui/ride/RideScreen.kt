@@ -45,6 +45,8 @@ import com.two17industries.rideman.core.Units
 import com.two17industries.rideman.data.RideScreen
 import com.two17industries.rideman.data.RidemanSettings
 import com.two17industries.rideman.ui.RideUiState
+import com.two17industries.rideman.ui.components.TerminalButton
+import com.two17industries.rideman.ui.components.TerminalButtonStyle
 import com.two17industries.rideman.ui.theme.LocalAccent
 import com.two17industries.rideman.ui.theme.Muted
 import java.util.Locale
@@ -248,7 +250,14 @@ private fun SideRail(
         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             PaginatorDots(count = count, currentIndex = currentIndex, accent = accent, vertical = true)
         }
-        EndButton(label = "END", onClick = onEndRide, accent = accent, fontSize = 15)
+        TerminalButton(
+            text = "END",
+            onClick = onEndRide,
+            style = TerminalButtonStyle.PRIMARY,
+            accent = accent,
+            fontSize = 15.sp,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -260,29 +269,13 @@ private fun BottomBar(count: Int, currentIndex: Int, onEndRide: () -> Unit, acce
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         PaginatorDots(count = count, currentIndex = currentIndex, accent = accent, vertical = false)
-        EndButton(label = "END RIDE", onClick = onEndRide, accent = accent, fontSize = 16)
-    }
-}
-
-/** The 217 primary button: 1px border, faint fill, sharp corners. Same treatment as START RIDE. */
-@Composable
-private fun EndButton(label: String, onClick: () -> Unit, accent: Color, fontSize: Int) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(accent.copy(alpha = 0.12f), Sharp)
-            .border(1.dp, accent, Sharp)
-            .clickable(onClick = onClick)
-            .padding(vertical = 15.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label,
-            color = accent,
-            style = MaterialTheme.typography.titleLarge.copy(
-                fontSize = fontSize.sp,
-                letterSpacing = 1.6.sp,
-            ),
+        TerminalButton(
+            text = "END RIDE",
+            onClick = onEndRide,
+            style = TerminalButtonStyle.PRIMARY,
+            accent = accent,
+            fontSize = 16.sp,
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }

@@ -12,15 +12,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,15 +27,25 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.two17industries.rideman.core.Plan
 import com.two17industries.rideman.core.PlanProgress
 import com.two17industries.rideman.core.PlanRide
 import com.two17industries.rideman.core.UnitSystem
-import com.two17industries.rideman.ui.theme.LocalAccent
+import com.two17industries.rideman.ui.components.BackLabel
+import com.two17industries.rideman.ui.components.CheckSquare
+import com.two17industries.rideman.ui.components.HairLine
+import com.two17industries.rideman.ui.components.PromptLabel
+import com.two17industries.rideman.ui.components.TerminalButton
+import com.two17industries.rideman.ui.components.TerminalButtonStyle
+import com.two17industries.rideman.ui.components.glow
+import com.two17industries.rideman.ui.theme.Background
+import com.two17industries.rideman.ui.theme.BorderCyanDim
+import com.two17industries.rideman.ui.theme.Cyan
+import com.two17industries.rideman.ui.theme.Dim
+import com.two17industries.rideman.ui.theme.Muted
+import com.two17industries.rideman.ui.theme.TextPrimary
 
 @Composable
 fun PlanPickerScreen(
@@ -49,51 +55,51 @@ fun PlanPickerScreen(
     onStart: (PlanRide) -> Unit,
     onBack: () -> Unit,
 ) {
-    val accent = LocalAccent.current
     val defaultExpanded = progress?.nextIncomplete()?.id ?: plan.rides.firstOrNull()?.id
     var expandedId by rememberSaveable { mutableStateOf(defaultExpanded) }
 
     // Build the ordered display list: a phase header appears before its first ride,
     // a week header before that week's first ride.
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
-        Text(
-            "◀ 14-WEEK PLAN",
-            color = accent,
-            style = MaterialTheme.typography.titleLarge,
+    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 18.dp, vertical = 16.dp)) {
+        BackLabel(
+            "14-WEEK PLAN",
             modifier = Modifier.clickable(onClick = onBack).padding(bottom = 12.dp),
         )
 
         val listItems = remember(plan) { buildPlanListItems(plan) }
-        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(listItems, key = { it.key }) { item ->
                 when (item) {
-                    is PlanListItem.PhaseHeaderItem -> PhaseHeader(item.number, item.name, accent)
+                    is PlanListItem.PhaseHeaderItem -> PhaseHeader(item.number, item.name)
                     is PlanListItem.WeekHeaderItem -> WeekHeader(item.week, item.recovery)
                     is PlanListItem.RideItem -> {
                         val ride = item.ride
                         val complete = progress?.isComplete(ride.id) == true
-                        if (ride.id == expandedId) ExpandedRow(ride, complete, accent, units)
-                        else CollapsedRow(ride, complete, accent, units) { expandedId = ride.id }
+                        if (ride.id == expandedId) ExpandedRow(ride, complete, units)
+                        else CollapsedRow(ride, complete, units) { expandedId = ride.id }
                     }
                 }
             }
         }
 
-        Button(
+        TerminalButton(
+            text = "START RIDE",
             onClick = { plan.byId[expandedId]?.let(onStart) },
             enabled = expandedId != null,
-            colors = ButtonDefaults.buttonColors(containerColor = accent),
+            style = TerminalButtonStyle.PRIMARY,
+            fontSize = 16.sp,
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-        ) { Text("START RIDE", style = MaterialTheme.typography.titleLarge) }
+        )
     }
 }
 
 @Composable
-private fun PhaseHeader(number: Int, name: String, accent: Color) {
-    Text(
+private fun PhaseHeader(number: Int, name: String) {
+    PromptLabel(
         "PHASE $number · ${name.uppercase()}",
-        color = accent.copy(alpha = 0.6f),
-        style = MaterialTheme.typography.labelLarge,
+        color = Muted,
+        fontSize = 10.sp,
+        letterSpacing = 1.6.sp,
         modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
     )
 }
@@ -102,8 +108,8 @@ private fun PhaseHeader(number: Int, name: String, accent: Color) {
 private fun WeekHeader(week: Int, recovery: Boolean) {
     Text(
         "Week $week" + if (recovery) " (recovery)" else "",
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-        style = MaterialTheme.typography.bodyLarge,
+        color = Dim,
+        style = MaterialTheme.typography.bodyLarge.copy(fontSize = 12.sp),
         modifier = Modifier.padding(top = 6.dp, bottom = 2.dp),
     )
 }
@@ -112,51 +118,29 @@ private fun WeekHeader(week: Int, recovery: Boolean) {
 private fun CollapsedRow(
     ride: PlanRide,
     complete: Boolean,
-    accent: Color,
     units: UnitSystem,
     onClick: () -> Unit,
 ) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 10.dp, horizontal = 12.dp),
+            .padding(vertical = 8.dp, horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        StatusDot(complete, accent)
-        Spacer(Modifier.width(12.dp))
+        CheckSquare(checked = complete, accent = Cyan, size = 18.dp)
+        Spacer(Modifier.width(11.dp))
         Text(
             "Ride ${ride.slot} · ${ride.kind}",
             modifier = Modifier.weight(1f),
-            color = if (complete) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
-            else MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.bodyLarge,
+            color = if (complete) Dim else TextPrimary,
+            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 13.sp),
         )
         Text(
             formatPlanDistance(ride.targetMiles, units),
-            color = if (complete) accent.copy(alpha = 0.5f) else accent,
-            fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.bodyLarge,
+            color = if (complete) Cyan.copy(alpha = 0.5f) else Cyan,
+            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 13.sp),
         )
-    }
-}
-
-@Composable
-private fun StatusDot(complete: Boolean, accent: Color) {
-    Box(
-        Modifier
-            .size(22.dp)
-            .clip(CircleShape)
-            .then(
-                if (complete) Modifier.background(accent)
-                else Modifier.border(1.5.dp, accent.copy(alpha = 0.5f), CircleShape)
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (complete) {
-            Text("✓", color = Color.Black, fontWeight = FontWeight.Black, style = MaterialTheme.typography.labelMedium)
-        }
     }
 }
 
@@ -164,16 +148,14 @@ private fun StatusDot(complete: Boolean, accent: Color) {
 private fun ExpandedRow(
     ride: PlanRide,
     complete: Boolean,
-    accent: Color,
     units: UnitSystem,
 ) {
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .border(1.5.dp, accent, RoundedCornerShape(14.dp))
-            .background(accent.copy(alpha = 0.08f))
-            .padding(16.dp),
+            .border(1.dp, Cyan, RectangleShape)
+            .background(Cyan.copy(alpha = 0.06f), RectangleShape)
+            .padding(14.dp),
     ) {
         Row(
             Modifier.fillMaxWidth(),
@@ -181,53 +163,85 @@ private fun ExpandedRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "Week ${ride.week} · Ride ${ride.slot} — ${ride.kind}",
-                color = accent, fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleMedium,
+                "WK ${ride.week} · RIDE ${ride.slot} - ${ride.kind}",
+                color = Cyan,
+                style = MaterialTheme.typography.titleLarge
+                    .copy(fontSize = 13.sp, letterSpacing = 0.5.sp)
+                    .glow(Cyan, blurRadius = 5f),
             )
             if (complete) {
-                Text("✓ DONE", color = accent, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
+                Text(
+                    "✓ DONE",
+                    color = Cyan,
+                    style = MaterialTheme.typography.labelLarge.copy(fontSize = 10.sp, letterSpacing = 1.2.sp),
+                )
             }
         }
-        Spacer(Modifier.height(12.dp))
-        DetailRow("TARGET", formatPlanDistance(ride.targetMiles, units), accent, valueStrong = true)
-        DetailRow("PACE", ride.pace.name.lowercase(), accent, valueStrong = false)
+
+        Spacer(Modifier.height(10.dp))
+        HairLine(color = BorderCyanDim)
+        Spacer(Modifier.height(9.dp))
+
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "TARGET",
+                color = Muted,
+                style = MaterialTheme.typography.labelLarge.copy(fontSize = 10.sp, letterSpacing = 1.2.sp),
+            )
+            Text(
+                formatPlanDistance(ride.targetMiles, units),
+                color = Cyan,
+                style = MaterialTheme.typography.titleLarge
+                    .copy(fontSize = 26.sp, letterSpacing = 0.sp)
+                    .glow(Cyan, blurRadius = 6f),
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "PACE",
+                color = Muted,
+                style = MaterialTheme.typography.labelLarge.copy(fontSize = 10.sp, letterSpacing = 1.2.sp),
+            )
+            Text(
+                ride.pace.name.lowercase(),
+                color = Cyan,
+                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 14.sp),
+            )
+        }
+
         if (ride.guidance.isNotBlank()) {
             Text(
                 ride.guidance,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                style = MaterialTheme.typography.bodyMedium,
+                color = Muted,
+                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 12.sp, lineHeight = 18.sp),
                 modifier = Modifier.padding(top = 10.dp),
             )
         }
+
         if (ride.longRide) {
             Box(
                 Modifier
                     .padding(top = 12.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(accent)
-                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                    .background(Cyan, RectangleShape)
+                    .padding(horizontal = 9.dp, vertical = 4.dp),
             ) {
-                Text("★ LONG RIDE", color = Color.Black, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                Text(
+                    "★ LONG RIDE",
+                    color = Background,
+                    style = MaterialTheme.typography.labelLarge.copy(fontSize = 10.sp, letterSpacing = 0.6.sp),
+                )
             }
         }
-    }
-}
-
-@Composable
-private fun DetailRow(label: String, value: String, accent: Color, valueStrong: Boolean) {
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), style = MaterialTheme.typography.labelMedium)
-        Text(
-            value,
-            color = accent,
-            fontWeight = if (valueStrong) FontWeight.Bold else FontWeight.Normal,
-            style = if (valueStrong) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleMedium,
-        )
     }
 }
 

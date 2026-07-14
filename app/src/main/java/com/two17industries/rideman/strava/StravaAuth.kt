@@ -89,7 +89,14 @@ class StravaAuth(
     private fun enc(s: String): String = URLEncoder.encode(s, "UTF-8")
 
     private companion object {
-        const val AUTHORIZE_URL = "https://www.strava.com/oauth/authorize"
+        /**
+         * The **mobile** authorize endpoint, not the web one. The web endpoint
+         * (`/oauth/authorize`) authorises fine and then strands the user in the browser: it
+         * cannot redirect to a custom scheme like `rideman://`, which no browser will follow.
+         * Strava's docs require the mobile endpoint on Android, reached by an implicit intent so
+         * the Strava app itself can service the authorisation and hand back to us.
+         */
+        const val AUTHORIZE_URL = "https://www.strava.com/oauth/mobile/authorize"
         const val TOKEN_URL = "https://www.strava.com/oauth/token"
         const val REDIRECT_URI = "rideman://strava-callback"
 

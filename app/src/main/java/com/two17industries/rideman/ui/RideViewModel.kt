@@ -123,6 +123,15 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { repo.deleteRides(rideIds) }
     }
 
+    /**
+     * (timestamp, bpm) for every fix in [rideId] that carried a reading.
+     *
+     * Loaded on demand rather than stored, because an auto-raised max HR moves every zone
+     * boundary and would make a cached breakdown wrong for past rides.
+     */
+    suspend fun heartRateSamples(rideId: Long): List<Pair<Long, Int>> =
+        repo.trackPoints(rideId).mapNotNull { p -> p.heartRateBpm?.let { p.timestamp to it } }
+
     /** Derived plan progress, or null if there is no loaded plan. */
     val progress: StateFlow<PlanProgress?> =
         repo.planTaggedRides()

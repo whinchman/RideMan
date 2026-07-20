@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.graphics.RectangleShape
@@ -21,6 +22,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,6 +32,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.two17industries.rideman.core.HeartRateZones
 import com.two17industries.rideman.core.Plan
 import com.two17industries.rideman.core.PlanAttempt
 import com.two17industries.rideman.core.PlanGrading
@@ -38,6 +43,7 @@ import com.two17industries.rideman.core.Units
 import com.two17industries.rideman.core.slotsUncompletedBy
 import com.two17industries.rideman.data.RideEntity
 import com.two17industries.rideman.data.StravaUploadState
+import com.two17industries.rideman.data.effectiveMaxHeartRate
 import com.two17industries.rideman.ui.components.BackLabel
 import com.two17industries.rideman.ui.components.CheckSquare
 import com.two17industries.rideman.ui.components.HairLine
@@ -53,6 +59,7 @@ import com.two17industries.rideman.ui.theme.Surface1
 import com.two17industries.rideman.ui.theme.TextPrimary
 import com.two17industries.rideman.ui.theme.Warn
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -69,8 +76,19 @@ fun HistoryScreen(
     stravaConnected: Boolean,
     onBackfill: () -> Unit,
     onDeleteRides: (List<Long>) -> Unit,
+    // Not threaded in from RidemanNav (History's existing call site is off-limits to this
+    // change); viewModel() resolves to the same Activity-scoped instance MainActivity already
+    // created, so this is the identical RideViewModel the rest of the app uses.
+    vm: RideViewModel = viewModel(),
 ) {
     var expandedId by remember { mutableStateOf<Long?>(null) }
+
+    val settings by vm.settings.collectAsState()
+    // Time in zone is never cached: an auto-raised max HR moves every zone boundary
+    // retroactively, so it must be recomputed from raw samples every time a row expands.
+    val year = remember { Calendar.getInstance().get(Calendar.YEAR) }
+    val maxHr = settings.effectiveMaxHeartRate(year)
+    val baselineHr = settings.baselineHeartRateBpm
 
     // Rides staged for deletion; non-empty means the confirm dialog is showing.
     var pendingDelete by remember { mutableStateOf<List<RideEntity>>(emptyList()) }
@@ -186,6 +204,9 @@ fun HistoryScreen(
                     onDelete = { pendingDelete = listOf(ride) },
                     onRetryUpload = onRetryUpload,
                     onOpenActivity = onOpenActivity,
+                    maxHr = maxHr,
+                    baselineHr = baselineHr,
+                    loadHeartRateSamples = { id -> vm.heartRateSamples(id) },
                 )
             }
         }
@@ -225,6 +246,9 @@ private fun RideRow(
     onRetryUpload: (Long) -> Unit,
     onOpenActivity: (Long) -> Unit,
     onDelete: () -> Unit,
+    maxHr: Int?,
+    baselineHr: Int?,
+    loadHeartRateSamples: suspend (Long) -> List<Pair<Long, Int>>,
 ) {
     val planRide = ride.planRideId?.let { plan?.byId?.get(it) }
     val dist = String.format(Locale.US, "%.1f", Units.distance(ride.distanceM, units))
@@ -307,12 +331,102 @@ private fun RideRow(
                 if (planRide == null) {
                     DetailLine("max speed", "${Units.speed(ride.maxSpeedMps, units).roundToInt()} ${Units.speedLabel(units)}", null)
                 }
+                ride.avgHeartRateBpm?.let { avg ->
+                    val max = ride.maxHeartRateBpm
+                    DetailLine(
+                        "heart rate",
+                        if (max != null) "$avg avg · $max max" else "$avg avg",
+                        null,
+                    )
+                }
+                if (ride.avgHeartRateBpm != null) {
+                    ZoneBreakdown(
+                        rideId = ride.id,
+                        maxHr = maxHr,
+                        baselineHr = baselineHr,
+                        loadSamples = loadHeartRateSamples,
+                    )
+                }
                 TerminalButton(
                     text = "✕ DELETE RIDE",
                     onClick = onDelete,
                     accent = Delete,
                     fontSize = 12.sp,
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ZoneBreakdown(
+    rideId: Long,
+    maxHr: Int?,
+    baselineHr: Int?,
+    loadSamples: suspend (Long) -> List<Pair<Long, Int>>,
+) {
+    if (maxHr == null) {
+        Text(
+            "Set your birth year in Settings to see zones",
+            color = Muted,
+            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 12.sp),
+            modifier = Modifier.padding(top = 7.dp),
+        )
+        return
+    }
+
+    var zones by remember(rideId) { mutableStateOf<LongArray?>(null) }
+    // Recomputed on every expand, never cached to the DB — max HR auto-raises, which moves
+    // every boundary retroactively. Keyed on rideId (plus maxHr/baselineHr) so expanding a
+    // different row re-fetches, and so a slow load for one ride can never land its result
+    // under a different row: LaunchedEffect cancels and restarts the coroutine whenever any
+    // key changes, and `zones` itself is scoped to rideId via the remember(rideId) above, so
+    // switching rows starts from null rather than showing the previous row's stale bars.
+    LaunchedEffect(rideId, maxHr, baselineHr) {
+        zones = HeartRateZones.timeInZoneMs(loadSamples(rideId), maxHr, baselineHr)
+    }
+
+    val z = zones ?: return
+    // Index 0 is "below zone 1" and is deliberately not shown.
+    val total = (1..HeartRateZones.COUNT).sumOf { z[it] }
+    if (total <= 0L) return
+
+    Column(
+        modifier = Modifier.padding(top = 7.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        for (i in 1..HeartRateZones.COUNT) {
+            val ms = z[i]
+            if (ms <= 0L) continue
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Z$i",
+                    color = Cyan,
+                    style = MaterialTheme.typography.labelLarge.copy(fontSize = 11.sp),
+                    modifier = Modifier.width(24.dp),
+                )
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .height(8.dp)
+                        .padding(end = 8.dp)
+                        .background(BorderCyanDim),
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(ms.toFloat() / total)
+                            .height(8.dp)
+                            .background(Cyan),
+                    )
+                }
+                Text(
+                    Units.duration(ms),
+                    color = Muted,
+                    style = MaterialTheme.typography.labelLarge.copy(fontSize = 11.sp, letterSpacing = 0.sp),
                 )
             }
         }

@@ -285,11 +285,22 @@ fun SettingsScreen(
                     // none runs while the rider is sitting here — so a missing permission would
                     // otherwise read as the bare "Heart rate off", with no way to act on it.
                     // blePermissionsGranted is what makes this visible at the point it matters.
-                    val permissionMissing =
-                        !blePermissionsGranted || hrmState == BleConnectionState.NO_PERMISSION
+                    // That is also why hrmState is not consulted here: it can only ever be
+                    // DISABLED on this screen, so a NO_PERMISSION term would be dead.
+                    val permissionMissing = !blePermissionsGranted
                     Text(
                         if (permissionMissing) {
                             hrmStatusLabel(BleConnectionState.NO_PERMISSION)
+                        } else if (hrmState == BleConnectionState.DISABLED) {
+                            // hrmStatusLabel is written for the ride screen, where DISABLED
+                            // genuinely means off. Here it never does: the only writers of
+                            // HrmStatus are the ride's foreground service and the calibration
+                            // screen, neither of which can be live while Settings is on screen,
+                            // and both call stop(), which sets DISABLED. Rendering the ride
+                            // screen's wording would pin this row at "Heart rate off" directly
+                            // beneath a toggle the rider has just set to On. The dash row two
+                            // sections up states the same thing the same way.
+                            "Idle (starts with your ride)"
                         } else {
                             hrmStatusLabel(hrmState)
                         },

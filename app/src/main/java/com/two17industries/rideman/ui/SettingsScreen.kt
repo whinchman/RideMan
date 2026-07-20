@@ -98,6 +98,8 @@ fun SettingsScreen(
     var birthYear by remember { mutableIntStateOf(current.birthYear ?: DEFAULT_BIRTH_YEAR) }
     var birthYearSet by remember { mutableStateOf(current.birthYear != null) }
     var maxHr by remember { mutableStateOf(current.maxHeartRateBpm) }
+    // Whether the rider actually moved the max-HR stepper this visit. See buildSettings().
+    var maxHrTouched by remember { mutableStateOf(false) }
     var showPicker by remember { mutableStateOf(false) }
 
     fun buildSettings(): RidemanSettings {
@@ -113,11 +115,28 @@ fun SettingsScreen(
             hrmEnabled = hrmEnabled,
             hrmAddress = hrmAddress,
             birthYear = if (birthYearSet) birthYear else null,
-            maxHeartRateBpm = maxHr,
+            maxHeartRateBpm = if (maxHrTouched) maxHr else current.maxHeartRateBpm,
         )
-        // baselineHeartRateBpm and baselineCalibratedAtMillis are deliberately absent — the
+        // One rule, three fields: a setting with a writer other than this screen must not be
+        // written back from a local that was seeded when the screen entered composition.
+        //
+        // baselineHeartRateBpm and baselineCalibratedAtMillis are absent outright — the
         // calibration screen writes them directly, and including them here would let a stale
         // local clobber a fresh calibration on the next SAVE.
+        //
+        // maxHeartRateBpm has the same hazard but cannot simply be dropped, because this
+        // stepper is also the only way to set it manually. It is the one setting with an
+        // *asynchronous, non-user* writer: RideViewModel.maybeRaiseMaxHeartRate writes it from
+        // the ride-save coroutine, after saveRide inserts thousands of rows and corroboratedPeak
+        // scans 15-20k samples on Dispatchers.Default. So the rider can tap Done, reach Settings
+        // while the raise is still computing (seeding the old value, or null), have the raise
+        // land, then tap SAVE and write the stale local straight back over it. Because
+        // applyNullableFields correctly uses remove() on null, a raise onto a previously-null
+        // field would be *erased*, not merely overwritten.
+        //
+        // Gating on maxHrTouched makes the field pass-through unless the rider actually moved
+        // the stepper: `current` is recomposed from the settings flow, so it carries the raised
+        // value, while the remembered local does not. Manual override still works.
     }
 
     if (showPicker) {
@@ -306,11 +325,16 @@ fun SettingsScreen(
                     onInc = { birthYear += 1; birthYearSet = true },
                 )
 
+                // Mirrors what buildSettings() will write: until the rider touches the stepper
+                // this row follows the stored value, so an auto-raise landing while Settings is
+                // open is shown rather than hidden behind a local seeded on entry.
+                val shownMaxHr = if (maxHrTouched) maxHr else current.maxHeartRateBpm
+
                 Stepper(
-                    value = maxHr ?: estimated ?: 180,
-                    label = if (maxHr == null) "MAX HR · ESTIMATED" else "MAX HR",
-                    onDec = { maxHr = (maxHr ?: estimated ?: 180) - 1 },
-                    onInc = { maxHr = (maxHr ?: estimated ?: 180) + 1 },
+                    value = shownMaxHr ?: estimated ?: 180,
+                    label = if (shownMaxHr == null) "MAX HR · ESTIMATED" else "MAX HR",
+                    onDec = { maxHr = (shownMaxHr ?: estimated ?: 180) - 1; maxHrTouched = true },
+                    onInc = { maxHr = (shownMaxHr ?: estimated ?: 180) + 1; maxHrTouched = true },
                 )
 
                 HairLine(color = BorderCyanDim)

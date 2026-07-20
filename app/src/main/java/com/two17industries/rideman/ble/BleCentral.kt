@@ -69,6 +69,32 @@ class BleCentral(
     @Volatile var targetAddress: String? = null
 
     @Volatile private var gatt: BluetoothGatt? = null
+
+    /**
+     * The last connection this class saw a STATE_DISCONNECTED for while [gatt] did NOT yet refer
+     * to it. Exists solely to unpin [gatt] after the following race.
+     *
+     * [onScanResult] does `gatt = result.device.connectGatt(...)`. The callback arrives on a
+     * binder thread and can land between `connectGatt` returning and that store landing — on a
+     * fast failure (immediate status 133, adapter downed under us) that is the common case, not
+     * an exotic one. The DISCONNECTED branch then reads `gatt` as null, skips the per-connection
+     * cleanup, and the main thread afterwards completes the assignment, pinning [gatt] to a
+     * connection that has already been closed. [onScanResult]'s `if (gatt != null) return` guard
+     * then blocks re-entry for the rest of the ride.
+     *
+     * WRITE ORDER IS LOAD-BEARING. The callback writes this field BEFORE reading [gatt];
+     * [onScanResult] writes [gatt] before reading this field. Both are [Volatile], so the two
+     * accesses on each side are ordered against each other, and the opposed order makes it
+     * impossible for both sides to miss: if the callback's read of [gatt] preceded
+     * [onScanResult]'s write, then the callback's write of this field preceded that too, so
+     * [onScanResult]'s later read must observe it. Reversing either pair reopens an interleaving
+     * in which neither side notices.
+     *
+     * A stale value is harmless: `connectGatt` always returns a freshly allocated object, so a
+     * new connection can never be reference-equal to one already recorded here.
+     */
+    @Volatile private var closedGatt: BluetoothGatt? = null
+
     @Volatile private var scanning = false
     @Volatile private var wantRunning = false
     @Volatile private var attempt = 0
@@ -115,14 +141,21 @@ class BleCentral(
      * Set the instant a notification arrives; cleared when the watchdog is armed. The watchdog
      * tail checks this AFTER its delay and stands down if it is set.
      *
-     * Cancellation alone is not enough. `firstNotifyJob?.cancel()` only takes effect at a
-     * suspension point, and the tail has none after its `delay` — so a cancel racing the
-     * coroutine's dispatch is a no-op and the tail runs anyway, disconnecting a connection that
-     * has just proven itself healthy. Worse, if a disconnect + reconnect + [subscribe] lands in
-     * that window, a tail that clears [firstNotifyJob] unconditionally clobbers the SUCCESSOR's
-     * job reference, leaving the new watchdog unreachable from [onCharacteristicChanged],
-     * [stop] and the DISCONNECTED branch — it then fires at its own timeout and tears down a
-     * healthy, notifying connection. The flag makes the decision independent of job identity.
+     * WHY A FLAG AND NOT JUST `cancel()`: the flag makes the stand-down decision independent of
+     * job identity, and that independence is the load-bearing property. If a disconnect +
+     * reconnect + [subscribe] lands while an old tail is in flight, a tail that clears
+     * [firstNotifyJob] unconditionally clobbers the SUCCESSOR's job reference, leaving the new
+     * watchdog unreachable from [onCharacteristicChanged], [stop] and the DISCONNECTED branch —
+     * it then fires at its own timeout and tears down a healthy, notifying connection. Reaching
+     * for the field is exactly what goes wrong; the flag answers "has THIS stage completed?"
+     * without consulting it.
+     *
+     * It also covers the genuinely uncancellable window. A `launch` continuation resuming from
+     * `delay` IS dispatched cancellably, so kotlinx does honour a `cancel()` that lands after the
+     * delay expires but before the continuation runs — an earlier version of this comment claimed
+     * otherwise and was simply wrong. The window `cancel()` cannot close is the narrower one
+     * after the body has already begun executing, and the flag closes that too because it is read
+     * as the body's first act.
      */
     @Volatile private var firstNotifyDone = false
 
@@ -152,6 +185,45 @@ class BleCentral(
     /** Discovery-stage twin of [firstNotifyDone]; same identity-race rationale. */
     @Volatile private var discoveryDone = false
 
+    /**
+     * Cancellable timeout for the TEARDOWN stage: `disconnect()` issued → DISCONNECTED delivered.
+     * Armed by [disconnectAndArmTeardown] and stood down by the DISCONNECTED branch.
+     *
+     * This stage is the funnel every recovery path in the class runs through — the discovery
+     * timeout, the first-notify watchdog, a failed CCCD write, a refused `onReady`, a stale
+     * service cache and a non-success CONNECTED all end in `disconnect()` and then wait. Until
+     * this timer existed it was the one stage with no bound at all: `disconnect()` on a stack
+     * that is wedged, or on a link whose peer has vanished without the controller noticing,
+     * simply never produces a STATE_DISCONNECTED callback. The terminal state is the same one
+     * every other stage's timeout exists to break — [gatt] non-null, `scanning` false,
+     * `retryJob` null, status frozen wherever it last was, and [onScanResult]'s `gatt != null`
+     * guard refusing re-entry — i.e. connected-but-silent or scanning-forever, for the ride.
+     *
+     * Armed for the DASH too, and cannot fire spuriously for it: it is bounded by a callback the
+     * platform owes for every connection it ever reports as connected, not by anything the peer
+     * chooses to send, and it is armed ONLY after this class has itself called `disconnect()` —
+     * i.e. only on a connection already being torn down. A healthy dash, which never notifies
+     * and never subscribes, never reaches an arming site at all.
+     */
+    @Volatile private var teardownJob: Job? = null
+
+    /**
+     * Teardown-stage stand-down, and the twin of [firstNotifyDone] / [discoveryDone] — but it
+     * holds the connection rather than a boolean, and that difference is required, not stylistic.
+     *
+     * Set to the connection when the timer is armed; cleared by the DISCONNECTED branch when the
+     * callback is for that same connection. The tail stands down unless this still refers to its
+     * own [BluetoothGatt], which gives it the same identity-independence the booleans give the
+     * other two stages plus immunity to a late DISCONNECTED for a SUPERSEDED connection standing
+     * down the live connection's timer.
+     *
+     * A boolean could not be stood down safely here. The other two stages stand down inside a
+     * callback that can gate itself on `gatt === g`; the DISCONNECTED branch cannot, because the
+     * race this whole wave exists to fix (see [closedGatt]) is precisely the one where
+     * `gatt === g` is false for the connection the callback is about.
+     */
+    @Volatile private var teardownGatt: BluetoothGatt? = null
+
     fun gatt(): BluetoothGatt? = gatt
 
     fun start() {
@@ -179,11 +251,16 @@ class BleCentral(
         firstNotifyJob = null
         discoveryJob?.cancel()
         discoveryJob = null
-        // Set the stand-down flags as well as cancelling: a tail already past its delay and
-        // mid-dispatch ignores cancel(), and without these it would call disconnect() on a
-        // connection stop() is in the middle of closing.
+        teardownJob?.cancel()
+        teardownJob = null
+        // Set the stand-down markers as well as cancelling. cancel() is honoured right up to the
+        // moment the tail's body begins, but not after — and these tails would otherwise call
+        // disconnect() on, or publish DISCONNECTED over, a connection stop() is in the middle of
+        // closing. Clearing teardownGatt is the teardown stage's equivalent of setting the two
+        // booleans; see [teardownGatt].
         firstNotifyDone = true
         discoveryDone = true
+        teardownGatt = null
         unregisterAdapterReceiver()
         stopScan()
         gatt?.close()
@@ -291,7 +368,9 @@ class BleCentral(
      * Neither produces any callback to react to, so only a timeout can catch them.
      *
      * Disconnecting routes both into recovery the class already has: onConnectionStateChange
-     * publishes DISCONNECTED and calls scheduleReconnect().
+     * publishes DISCONNECTED and calls scheduleReconnect(). That handoff is itself bounded —
+     * the disconnect goes through [disconnectAndArmTeardown], so a DISCONNECTED that never
+     * arrives no longer strands the connection here. See [teardownJob].
      *
      * [g] is captured in the closure and disconnected directly; the field is never read here,
      * so this timer can only ever tear down its OWN connection, never a successor's.
@@ -301,17 +380,25 @@ class BleCentral(
         firstNotifyJob?.cancel()
         firstNotifyJob = scope.launch {
             delay(FIRST_NOTIFY_TIMEOUT_MS)
-            // Stand down on the flag, not on cancellation: there is no suspension point after
-            // the delay, so a cancel() racing this dispatch would not stop us. See
-            // [firstNotifyDone].
+            // Stand down on the flag, not on job identity — see [firstNotifyDone].
             if (firstNotifyDone) return@launch
             // Cancelled HERE, not left to the DISCONNECTED branch. See FIRST_NOTIFY_TIMEOUT_MS:
             // attempt must not be reset for a connection we are tearing down as silent, and
             // relying on the DISCONNECTED callback to arrive within the remaining margin makes
             // that correctness a function of callback latency.
-            readyResetJob?.cancel()
-            readyResetJob = null
-            if (hasPermissions()) runCatching { g.disconnect() }
+            //
+            // Compare-before-null on the shared field, for the same reason the KDoc on
+            // [firstNotifyDone] gives for not clearing [firstNotifyJob] unconditionally: nulling
+            // it blind would clobber a SUCCESSOR's reset job, leaving it unreachable from [stop]
+            // and the DISCONNECTED branch and free to reset [attempt] for a connection this tail
+            // knows nothing about. Unreachable today only because [scope] is
+            // Dispatchers.Main.immediate and every connection-creating path is main-confined —
+            // an incidental property, not one this file states anywhere, and one that a move off
+            // Main or a switch to the Handler overload of connectGatt would silently withdraw.
+            val reset = readyResetJob
+            reset?.cancel()
+            if (readyResetJob === reset) readyResetJob = null
+            disconnectAndArmTeardown(g)
         }
     }
 
@@ -329,14 +416,88 @@ class BleCentral(
         discoveryJob = scope.launch {
             delay(DISCOVERY_TIMEOUT_MS)
             if (discoveryDone) return@launch
-            // Same reason as the watchdog: do not let a stalled connection's teardown race a
-            // pending attempt reset. (Nothing can have armed readyResetJob for THIS connection
-            // yet — it is armed in onServicesDiscovered, which by definition has not run — but
-            // cancelling unconditionally keeps the two timers symmetric and costs nothing.)
-            readyResetJob?.cancel()
-            readyResetJob = null
-            if (hasPermissions()) runCatching { g.disconnect() }
+            // No readyResetJob cancel here, deliberately. It was self-admittedly a no-op for
+            // THIS connection — readyResetJob is armed in onServicesDiscovered, which by
+            // definition has not run when this tail fires — so the only job it could ever have
+            // cancelled belonged to somebody else. "Symmetric and costs nothing" was wrong on
+            // the second half: it cost an unnecessary touch of a shared field from a tail with
+            // no claim to it. Removing it halves the exposure at zero behavioural cost.
+            disconnectAndArmTeardown(g)
         }
+    }
+
+    /**
+     * The ONLY route to a self-initiated `disconnect()` in this class. Every recovery path —
+     * non-success CONNECTED, `discoverServices()` returning false, non-success discovery, a
+     * listener refusing `onReady`, a failed CCCD write, and both stage watchdogs — goes through
+     * here, so no call site can issue a disconnect and forget to bound it.
+     *
+     * The timer is armed even when `hasPermissions()` is false and the `disconnect()` was
+     * therefore never issued. That case needs the exit MORE, not less: nothing was asked of the
+     * stack, so nothing is coming back, and without the timer the connection would sit pinned in
+     * [gatt] forever.
+     */
+    private fun disconnectAndArmTeardown(g: BluetoothGatt) {
+        if (hasPermissions()) runCatching { g.disconnect() }
+        armTeardownTimeout(g)
+    }
+
+    /**
+     * Bounds the teardown stage — see [teardownJob] for the stall this exists to break.
+     *
+     * Structurally identical to the other two stage timers: the connection is captured in the
+     * closure and never read from the field, so this can only ever act on its OWN connection,
+     * and the stand-down ([teardownGatt]) is checked as the body's first act so a tail already
+     * past cancellation cannot publish DISCONNECTED over a link that has since been replaced.
+     */
+    private fun armTeardownTimeout(g: BluetoothGatt) {
+        teardownGatt = g
+        teardownJob?.cancel()
+        teardownJob = scope.launch {
+            delay(TEARDOWN_TIMEOUT_MS)
+            if (teardownGatt !== g) return@launch
+            teardownGatt = null
+            // The DISCONNECTED callback is not coming. Do its job: release the client interface
+            // (unconditional for the same reason it is unconditional in the callback — close()
+            // releases the interface belonging to g, whichever connection g is), drop the
+            // per-connection state, and hand the rider back to the reconnect loop.
+            runCatching { g.close() }
+            // Same single-read, same widened guard as the DISCONNECTED branch, for the same
+            // reason — see the comments there. No successor can actually be live at this point
+            // (every route that nulls `gatt` for this connection also stands this timer down),
+            // but the invariant is stated rather than assumed.
+            val current = gatt
+            if (current === g) clearConnectionState()
+            if (wantRunning && (current == null || current === g)) {
+                listener.onDisconnected()
+                status.set(BleConnectionState.DISCONNECTED)
+                scheduleReconnect()
+            }
+        }
+    }
+
+    /**
+     * Drops everything that belongs to the connection currently in [gatt]. Callers must have
+     * established that the connection they are retiring IS the one in the field.
+     *
+     * Deliberately does NOT touch [teardownJob]. Its stand-down ([teardownGatt]) is cleared by
+     * the DISCONNECTED branch before this is called, so the tail already no-ops, and one of this
+     * function's two callers IS that tail — cancelling the coroutine it is running in is a trap
+     * this file has been caught by once already (see the comment in [scheduleReconnect]).
+     */
+    private fun clearConnectionState() {
+        gatt = null
+        readyResetJob?.cancel()
+        readyResetJob = null
+        firstNotifyJob?.cancel()
+        firstNotifyJob = null
+        discoveryJob?.cancel()
+        discoveryJob = null
+        // Stand-down markers as well as cancels: cancel() stops being honoured once a tail's
+        // body has begun, and this connection's timers are moot now. Re-cleared when the next
+        // connection arms them.
+        firstNotifyDone = true
+        discoveryDone = true
     }
 
     private fun startScan() {
@@ -420,7 +581,21 @@ class BleCentral(
             val wanted = targetAddress
             if (wanted != null && !wanted.equals(result.device.address, ignoreCase = true)) return
             stopScan()
-            gatt = result.device.connectGatt(appContext, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+            val g = result.device.connectGatt(appContext, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+            gatt = g
+            // Re-check IMMEDIATELY after the store, and in this order. A STATE_DISCONNECTED for
+            // g can be delivered on a binder thread before the line above lands — routine on an
+            // immediate status-133 failure — in which case the callback saw `gatt` as null,
+            // skipped its per-connection cleanup, and the store above has just pinned the field
+            // to a connection that is already closed and can never disconnect again. Recovery
+            // itself is not lost (the callback's wantRunning branch already published
+            // DISCONNECTED and scheduled the retry); what is lost without this is the `gatt`
+            // field, and with it the `gatt != null` guard above, permanently. See [closedGatt]
+            // for why this ordering is what makes the two sides unable to both miss.
+            if (closedGatt === g) {
+                closedGatt = null
+                if (gatt === g) gatt = null
+            }
         }
 
         override fun onScanFailed(errorCode: Int) {
@@ -439,7 +614,7 @@ class BleCentral(
                     // completes or returns a stale cache. Disconnect so the DISCONNECTED branch
                     // re-arms the backoff.
                     if (status_ != BluetoothGatt.GATT_SUCCESS) {
-                        g.disconnect()
+                        disconnectAndArmTeardown(g)
                         return
                     }
                     // discoverServices() returns false when the stack is busy or the link is
@@ -450,33 +625,54 @@ class BleCentral(
                     // The twin failure — returning true and then never calling
                     // onServicesDiscovered — has no platform timeout behind it, so it gets an
                     // explicit one. See discoveryJob.
-                    if (!g.discoverServices()) g.disconnect() else armDiscoveryTimeout(g)
+                    if (!g.discoverServices()) disconnectAndArmTeardown(g) else armDiscoveryTimeout(g)
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     // close() stays unconditional: it releases THIS callback's own client
                     // interface, which is correct to do whichever connection g is.
                     g.close()
-                    // Everything below mutates state that belongs to the CURRENT connection, so
-                    // all of it is gated on the identity check — not just `gatt`. A DISCONNECTED
-                    // for a superseded connection would otherwise cancel the live connection's
-                    // timers, tell the listener it had disconnected, publish DISCONNECTED over a
-                    // live link and start a redundant reconnect. Not reachable today (a new
-                    // connectGatt can only follow this body completing for the old connection),
-                    // but the asymmetry was exactly the stale-connection-identity mistake this
-                    // class has already been bitten by.
-                    if (gatt === g) {
-                        gatt = null
-                        readyResetJob?.cancel()
-                        readyResetJob = null
-                        firstNotifyJob?.cancel()
-                        firstNotifyJob = null
-                        discoveryJob?.cancel()
-                        discoveryJob = null
-                        // Stand-down flags as well as cancels, for the same reason as in stop():
-                        // a tail already past its delay ignores cancel(), and this connection's
-                        // timers are moot now. Re-cleared when the next connection arms them.
-                        firstNotifyDone = true
-                        discoveryDone = true
+                    // Written BEFORE the `gatt === g` read below. That order is the entire proof
+                    // that the connectGatt/callback race cannot pin the field — see [closedGatt].
+                    closedGatt = g
+                    // The teardown stage has reached its terminal state, so its timer stands
+                    // down. Keyed on the connection, not a bare boolean, because this branch
+                    // cannot gate itself on `gatt === g` — the race above is precisely the case
+                    // where that is false for the connection this callback is about.
+                    if (teardownGatt === g) teardownGatt = null
+                    // ONE read of the field, shared by both decisions below. Two reads could
+                    // observe different values (onScanResult's store can land between them) and
+                    // the two decisions would then disagree about which connection is live.
+                    val current = gatt
+                    // State that belongs to a SPECIFIC connection is gated on identity: a
+                    // DISCONNECTED for a superseded connection must not cancel the live
+                    // connection's timers or null its gatt.
+                    if (current === g) clearConnectionState()
+                    // Recovery is NOT gated on `current === g`, and putting it inside that gate
+                    // was a regression. Two entrances reach a DISCONNECTED where it is false: the
+                    // race in [closedGatt], and any connection torn down before its assignment
+                    // landed. In both, the gate skipped onDisconnected(), the status publish and
+                    // — fatally — scheduleReconnect(), leaving wantRunning true with nothing left
+                    // that could ever start a scan again. The gate's real prize was narrower than
+                    // its comment claimed: it stops a late DISCONNECTED overwriting stop()'s
+                    // DISABLED. wantRunning buys exactly that.
+                    //
+                    // `current == null` widens the gate to cover the race and nothing else. It is
+                    // the state during the connectGatt window (the store has not landed) and
+                    // after a teardown-timeout cleanup, and in both there is no live connection
+                    // for this recovery to trample. The remaining case — `current` non-null and
+                    // not g — is a genuine live successor that owns its own recovery, and
+                    // publishing DISCONNECTED over it is the connected-but-shown-as-dead signature
+                    // this class keeps producing. [armTeardownTimeout] made that case reachable
+                    // for the first time (it can null `gatt` and let a successor connect while a
+                    // late DISCONNECTED for the old connection is still in flight), so the guard
+                    // is load-bearing now rather than defensive.
+                    //
+                    // Recovery running twice for one connection (teardown timeout, then its
+                    // DISCONNECTED arriving late after all) is accepted: it costs one redundant
+                    // scheduleReconnect and a DISCONNECTED briefly shown while scanning, and
+                    // startScan republishes SCANNING within the backoff interval. A missed
+                    // recovery costs the ride; a duplicated one costs a second.
+                    if (wantRunning && (current == null || current === g)) {
                         listener.onDisconnected()
                         status.set(BleConnectionState.DISCONNECTED)
                         scheduleReconnect()
@@ -486,6 +682,14 @@ class BleCentral(
         }
 
         override fun onServicesDiscovered(g: BluetoothGatt, status_: Int) {
+            // ABOVE the flag write, deliberately. A late discovery callback for connection A,
+            // landing after B has armed its own discovery timeout, would otherwise set B's
+            // stand-down flag — B's watchdog then declines to fire and B is left with no exit
+            // from the discovery stage at all, reopening the stall this timer exists to close.
+            // Worse here than in onCharacteristicChanged: without this guard the body runs on
+            // to hand dead connection A to listener.onReady(), subscribe against A's stale
+            // characteristic handles, and publish CONNECTED for a link that is already gone.
+            if (gatt !== g) return
             // Discovery reached its terminal state, so the stage timeout has done its job —
             // stood down FIRST, before any branch below can return or disconnect. Flag before
             // cancel, because cancel() alone cannot stop a tail that is already past its delay.
@@ -502,7 +706,7 @@ class BleCentral(
             // complete with GATT_SUCCESS against the wrong handle, and nothing would ever
             // notify. Another route to connected-but-silent, so refuse the connection outright.
             if (status_ != BluetoothGatt.GATT_SUCCESS) {
-                g.disconnect()
+                disconnectAndArmTeardown(g)
                 return
             }
             if (listener.onReady(g)) {
@@ -516,11 +720,18 @@ class BleCentral(
                 readyResetJob?.cancel()
                 readyResetJob = scope.launch {
                     delay(READY_STABLE_MS)
+                    // Compare-before-act, the same treatment the two watchdog tails get. This
+                    // tail had neither an identity check nor a stand-down flag, so one left over
+                    // from a connection that has since been torn down would reset attempt for
+                    // whatever connection happens to be live — pinning the backoff at its 1s
+                    // floor across exactly the repeated-failure sequence the counter exists to
+                    // climb. Capturing g makes the decision belong to this connection.
+                    if (gatt !== g) return@launch
                     attempt = 0
                 }
                 status.set(BleConnectionState.CONNECTED)
             } else {
-                g.disconnect()
+                disconnectAndArmTeardown(g)
             }
         }
 
@@ -536,7 +747,9 @@ class BleCentral(
          * rather than costing the rider the whole ride.
          */
         override fun onDescriptorWrite(g: BluetoothGatt, d: BluetoothGattDescriptor, status_: Int) {
-            if (d.uuid == CCCD_UUID && status_ != BluetoothGatt.GATT_SUCCESS) g.disconnect()
+            if (d.uuid == CCCD_UUID && status_ != BluetoothGatt.GATT_SUCCESS) {
+                disconnectAndArmTeardown(g)
+            }
         }
 
         // No onCharacteristicWrite: it existed only to advance the removed queue. The dash's
@@ -548,11 +761,16 @@ class BleCentral(
             c: BluetoothGattCharacteristic,
             value: ByteArray,
         ) {
+            // ABOVE the flag write. A late notification from connection A, landing after B has
+            // subscribed and armed, would otherwise set B's stand-down flag: B's watchdog then
+            // declines to fire and B has no silent-hang exit left, which is the exact failure
+            // the watchdog exists to catch.
+            if (gatt !== g) return
             // First notification proves the subscription is live. The flag is set BEFORE the
-            // cancel and is what actually stops the watchdog: a cancel() arriving while the
-            // tail is being dispatched is a no-op (no suspension point after its delay), so
-            // without this a healthy strap that notified at 9.99s would still be disconnected.
-            // See firstNotifyDone.
+            // cancel and is what actually stops the watchdog — not because cancel() is powerless
+            // (it is honoured until the tail's body begins), but because the decision must not
+            // depend on the shared job field still pointing at this connection's watchdog. See
+            // firstNotifyDone.
             firstNotifyDone = true
             firstNotifyJob?.cancel()
             firstNotifyJob = null
@@ -615,5 +833,20 @@ class BleCentral(
          * stalls rather than being reset by a [readyResetJob] that outlives the teardown.
          */
         private const val DISCOVERY_TIMEOUT_MS = 10_000L
+
+        /**
+         * How long after a self-initiated `disconnect()` STATE_DISCONNECTED may take before the
+         * teardown is completed locally instead. Teardown on a healthy stack is milliseconds —
+         * this is not a stage that runs long on real hardware, it is one that either finishes at
+         * once or never finishes at all — so 5s is already far beyond generous, and keeping it
+         * short matters because every other recovery path in the class waits behind it.
+         *
+         * Comfortably under [READY_STABLE_MS] as well, though not for the reason the other two
+         * carry that constraint: this stage's tail cannot leave a [readyResetJob] running,
+         * because whichever path armed it has already cancelled it (the watchdog explicitly, the
+         * DISCONNECTED-equivalent cleanup in [armTeardownTimeout] structurally). The margin is
+         * simply belt and braces.
+         */
+        private const val TEARDOWN_TIMEOUT_MS = 5_000L
     }
 }

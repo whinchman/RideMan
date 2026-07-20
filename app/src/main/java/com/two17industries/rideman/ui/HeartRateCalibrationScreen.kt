@@ -75,6 +75,8 @@ import kotlinx.coroutines.withContext
 @Composable
 fun HeartRateCalibrationScreen(
     hrmAddress: String?,
+    /** Max HR in force, for the sanity check on the result. Null when the rider has set neither. */
+    maxHr: Int?,
     onSave: (baselineBpm: Int, atMillis: Long) -> Unit,
     onDone: () -> Unit,
 ) {
@@ -215,23 +217,40 @@ fun HeartRateCalibrationScreen(
         when {
             result != null -> {
                 val r = result
+                // A seated baseline at or above max HR is not a physiological result — one of
+                // the two numbers is wrong. Rejected here, at the point of saving, rather than
+                // stored: HeartRateZones.lowerBounds guards with `baselineHr < maxHr` and falls
+                // back to percent-of-max, so storing it would leave Settings displaying a
+                // calibration that every zone calculation ignores. Showing the rider a value
+                // that is not in use is the one outcome to avoid.
+                val aboveMax = r is CalibrationResult.Ok && maxHr != null && r.baselineBpm >= maxHr
                 Text(
-                    when (r) {
-                        is CalibrationResult.Ok -> "${r.baselineBpm} bpm"
-                        is CalibrationResult.Failed -> when (r.reason) {
-                            CalibrationResult.Failure.TOO_SHORT ->
-                                "Stopped early — the full five minutes is needed."
-                            CalibrationResult.Failure.POOR_CONTACT ->
-                                "Strap contact was poor. Moisten the electrodes and try again."
-                            CalibrationResult.Failure.TOO_VARIABLE ->
-                                "Heart rate never settled. Sit still and try again."
-                            CalibrationResult.Failure.INSUFFICIENT_DATA ->
-                                "Not enough readings came through. Reseat the strap and try again."
+                    when {
+                        aboveMax -> {
+                            val bpm = (r as CalibrationResult.Ok).baselineBpm
+                            "Baseline came out at $bpm bpm, at or above your max HR of $maxHr. " +
+                                "One of the two is wrong, so this was not saved. Check your max " +
+                                "HR in Settings, then calibrate again."
                         }
-                        null -> ""
+                        else -> when (r) {
+                            is CalibrationResult.Ok -> "${r.baselineBpm} bpm"
+                            is CalibrationResult.Failed -> when (r.reason) {
+                                CalibrationResult.Failure.TOO_SHORT ->
+                                    "Stopped early — the full five minutes is needed."
+                                CalibrationResult.Failure.POOR_CONTACT ->
+                                    "Strap contact was poor. Moisten the electrodes and try again."
+                                CalibrationResult.Failure.TOO_VARIABLE ->
+                                    "Heart rate never settled. Sit still and try again."
+                                CalibrationResult.Failure.INSUFFICIENT_DATA ->
+                                    "Not enough readings came through. Reseat the strap and try again."
+                            }
+                            null -> ""
+                        }
                     },
-                    color = if (r is CalibrationResult.Ok) Cyan else TextPrimary,
-                    style = if (r is CalibrationResult.Ok) {
+                    // A rejected result reads as prose, not as the big cyan number: it is a
+                    // failure, and must not look like a value the rider now has.
+                    color = if (r is CalibrationResult.Ok && !aboveMax) Cyan else TextPrimary,
+                    style = if (r is CalibrationResult.Ok && !aboveMax) {
                         MaterialTheme.typography.titleLarge.copy(fontSize = 34.sp)
                     } else {
                         MaterialTheme.typography.bodyLarge.copy(fontSize = 14.sp)
@@ -239,7 +258,7 @@ fun HeartRateCalibrationScreen(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(vertical = 24.dp),
                 )
-                if (r is CalibrationResult.Ok) {
+                if (r is CalibrationResult.Ok && !aboveMax) {
                     TerminalButton(
                         text = "SAVE BASELINE",
                         onClick = { onSave(r.baselineBpm, System.currentTimeMillis()); onDone() },

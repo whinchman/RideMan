@@ -35,7 +35,7 @@ fun RidemanNav(
     var activePlanRide by remember { mutableStateOf<PlanRide?>(null) }
 
     // Max HR is age-derived when not set explicitly, so it needs the current year.
-    val historyYear = remember { java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) }
+    val currentYear = remember { java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) }
 
     LaunchedEffect(dest) { onRideActiveChanged(dest == Dest.RIDE) }
 
@@ -150,7 +150,7 @@ fun RidemanNav(
                 stravaConnected = stravaConnected,
                 onBackfill = { dest = Dest.BACKFILL },
                 onDeleteRides = { vm.deleteRides(it) },
-                maxHr = settings.effectiveMaxHeartRate(historyYear),
+                maxHr = settings.effectiveMaxHeartRate(currentYear),
                 baselineHr = settings.baselineHeartRateBpm,
                 loadHeartRateSamples = { id -> vm.heartRateSamples(id) },
             )
@@ -161,6 +161,9 @@ fun RidemanNav(
                 // The screen connects the strap itself for the length of its composition — no
                 // ride is running here, so nothing else would.
                 hrmAddress = settings.hrmAddress,
+                // For the sanity check on the result: a seated baseline at or above max HR is
+                // not a physiological reading, and HeartRateZones would silently ignore it.
+                maxHr = settings.effectiveMaxHeartRate(currentYear),
                 onSave = { bpm, at ->
                     vm.saveSettings(
                         settings.copy(baselineHeartRateBpm = bpm, baselineCalibratedAtMillis = at)

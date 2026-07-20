@@ -45,7 +45,9 @@ class LocationForegroundService : Service() {
     // before either assigns. This flag must be set synchronously, before the coroutine
     // suspends, to actually prevent a second DashBroadcaster (and thus a second 1 Hz GATT
     // writer) or a second HrmBleClient from being created.
-    private var dashRequested = false
+    // Guards both clients, not just the dash: dashEnabled and hrmEnabled are tested
+    // independently inside the launch, so one settings read serves both.
+    private var clientsRequested = false
 
     private val callback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -85,8 +87,8 @@ class LocationForegroundService : Service() {
             startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
         }
         requestUpdates()
-        if (!dashRequested) {
-            dashRequested = true
+        if (!clientsRequested) {
+            clientsRequested = true
             scope.launch {
                 val settings = SettingsStore(applicationContext).settings.first()
                 if (settings.dashEnabled) {

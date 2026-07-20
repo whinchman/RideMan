@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
@@ -175,6 +176,9 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
         LocationBus.reset()
         HrmBus.reset()
         hrSamples.clear()
+        // A raise the rider dismissed by navigating away rather than by an explicit action would
+        // otherwise stay latched and re-fire at the end of this ride.
+        _maxHrRaised.value = null
         LocationForegroundService.start(getApplication())
         collectorJobs += collectLocation()
         collectorJobs += collectSensors()
@@ -220,7 +224,15 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun collectElapsed() = viewModelScope.launch {
         while (isActive) {
-            _ui.value = _ui.value.copy(elapsedMs = System.currentTimeMillis() - startMillis)
+            val now = System.currentTimeMillis()
+            _ui.value = _ui.value.copy(
+                elapsedMs = now - startMillis,
+                // Re-evaluated every tick so the readout ages out on its own. HrmBus.latest is a
+                // StateFlow, so a strap that goes quiet without a GATT disconnect never re-emits
+                // and its collector never fires again; collectLocation would normally correct
+                // this within a second, but not when GPS is unavailable too — the tunnel case.
+                heartRateBpm = HeartRateStamp.bpmFor(now, HrmBus.latest.value),
+            )
             delay(1_000L)
         }
     }
@@ -241,8 +253,10 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
             HrmBus.latest.collect { hr ->
                 hr ?: return@collect
                 hrSamples.add(CalibrationSample(hr.epochMillis, hr.bpm, hr.contactOk))
+                // Same staleness rule as the stamping path: heartRateBpm promises null once a
+                // reading has gone stale, and a bare contactOk check does not implement that.
                 _ui.value = _ui.value.copy(
-                    heartRateBpm = if (hr.contactOk) hr.bpm else null,
+                    heartRateBpm = HeartRateStamp.bpmFor(System.currentTimeMillis(), hr),
                 )
             }
         },
@@ -272,9 +286,14 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
     fun persistLastRide() {
         val summary = lastSummary ?: return
         val snapshot = track.toList()
+        // Snapshot alongside the track, for the same reason. Nav navigates to START in the same
+        // handler that calls this, and the next tap is startRide(), which clears hrSamples and
+        // installs a new collector on Main — reading the live field from Dispatchers.Default
+        // would both break per-ride isolation and race an unsynchronised mutableListOf.
+        val hrSnapshot = hrSamples.toList()
         viewModelScope.launch {
             val rideId = repo.saveRide(summary, snapshot, activePlanRideId)
-            maybeRaiseMaxHeartRate()
+            maybeRaiseMaxHeartRate(hrSnapshot)
             if (settings.value.stravaUploadEnabled && stravaStore.isConnected) {
                 val ride = repo.getRide(rideId) ?: return@launch
                 repo.markQueued(rideId, ride)
@@ -294,14 +313,17 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
      * Raise the stored max HR if this ride corroborated a higher one. Never lowers. Raising
      * moves every zone boundary, including on past rides, so the rider is told.
      */
-    private suspend fun maybeRaiseMaxHeartRate() {
+    private suspend fun maybeRaiseMaxHeartRate(samples: List<CalibrationSample>) {
         // corroboratedPeak is O(n^2) in the worst case and a real strap notifies on the
         // heartbeat, not at 1 Hz — a two-hour ride is 15-20k samples. viewModelScope defaults
         // to the Main dispatcher, so this MUST be moved off it or ride save janks the UI.
         val candidate = withContext(Dispatchers.Default) {
-            MaxHeartRate.corroboratedPeak(hrSamples.toList())
+            MaxHeartRate.corroboratedPeak(samples)
         } ?: return
-        val current = settings.value
+        // Read through rather than off the cached snapshot: this is the one non-user-initiated
+        // caller of read-modify-write, and `settings` seeds Eagerly with an all-defaults
+        // RidemanSettings until DataStore first emits, which a save here would write back.
+        val current = settingsStore.settings.first()
         val year = Calendar.getInstance().get(Calendar.YEAR)
         val existing = current.effectiveMaxHeartRate(year)
         if (existing != null && candidate <= existing) return

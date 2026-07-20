@@ -4,9 +4,11 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.two17industries.rideman.core.CadenceMode
+import com.two17industries.rideman.core.MaxHeartRate
 import com.two17industries.rideman.core.UnitSystem
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -40,7 +42,23 @@ data class RidemanSettings(
     val stravaUploadEnabled: Boolean = true,
     val dashEnabled: Boolean = false,
     val rideOrientation: RideOrientation = RideOrientation.PORTRAIT,
+    val hrmEnabled: Boolean = false,
+    /** MAC of the remembered strap, or null to connect to the first one found. */
+    val hrmAddress: String? = null,
+    val birthYear: Int? = null,
+    /** Explicit or auto-raised max HR. Null means fall back to the age estimate. */
+    val maxHeartRateBpm: Int? = null,
+    /** Result of the last calibration. Null means zones use percent-of-max. */
+    val baselineHeartRateBpm: Int? = null,
+    val baselineCalibratedAtMillis: Long? = null,
 )
+
+/**
+ * Max HR to use for zones: the stored value, else the age estimate, else null when the rider
+ * has configured neither (zones are unavailable until one exists).
+ */
+fun RidemanSettings.effectiveMaxHeartRate(currentYear: Int): Int? =
+    maxHeartRateBpm ?: birthYear?.let { MaxHeartRate.estimateFromAge(it, currentYear) }
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
@@ -55,6 +73,12 @@ class SettingsStore(private val context: Context) {
         val DASH_ENABLED = booleanPreferencesKey("dash_enabled")
         val GRID_MIGRATED = booleanPreferencesKey("grid_migrated")
         val RIDE_ORIENTATION = stringPreferencesKey("ride_orientation")
+        val HRM_ENABLED = booleanPreferencesKey("hrm_enabled")
+        val HRM_ADDRESS = stringPreferencesKey("hrm_address")
+        val BIRTH_YEAR = intPreferencesKey("birth_year")
+        val MAX_HR = intPreferencesKey("max_hr_bpm")
+        val BASELINE_HR = intPreferencesKey("baseline_hr_bpm")
+        val BASELINE_AT = longPreferencesKey("baseline_calibrated_at")
     }
 
     val settings: Flow<RidemanSettings> = context.dataStore.data.map { p ->
@@ -76,6 +100,12 @@ class SettingsStore(private val context: Context) {
             rideOrientation = p[Keys.RIDE_ORIENTATION]
                 ?.let { runCatching { RideOrientation.valueOf(it) }.getOrNull() }
                 ?: RideOrientation.PORTRAIT,
+            hrmEnabled = p[Keys.HRM_ENABLED] ?: false,
+            hrmAddress = p[Keys.HRM_ADDRESS],
+            birthYear = p[Keys.BIRTH_YEAR],
+            maxHeartRateBpm = p[Keys.MAX_HR],
+            baselineHeartRateBpm = p[Keys.BASELINE_HR],
+            baselineCalibratedAtMillis = p[Keys.BASELINE_AT],
         )
     }
 
@@ -90,6 +120,14 @@ class SettingsStore(private val context: Context) {
             p[Keys.DASH_ENABLED] = s.dashEnabled
             p[Keys.GRID_MIGRATED] = true
             p[Keys.RIDE_ORIENTATION] = s.rideOrientation.name
+            p[Keys.HRM_ENABLED] = s.hrmEnabled
+            // These are the app's first nullable settings, and save() writes every key
+            // unconditionally — so clearing one needs remove(), not assignment.
+            s.hrmAddress?.let { p[Keys.HRM_ADDRESS] = it } ?: p.remove(Keys.HRM_ADDRESS)
+            s.birthYear?.let { p[Keys.BIRTH_YEAR] = it } ?: p.remove(Keys.BIRTH_YEAR)
+            s.maxHeartRateBpm?.let { p[Keys.MAX_HR] = it } ?: p.remove(Keys.MAX_HR)
+            s.baselineHeartRateBpm?.let { p[Keys.BASELINE_HR] = it } ?: p.remove(Keys.BASELINE_HR)
+            s.baselineCalibratedAtMillis?.let { p[Keys.BASELINE_AT] = it } ?: p.remove(Keys.BASELINE_AT)
         }
     }
 }

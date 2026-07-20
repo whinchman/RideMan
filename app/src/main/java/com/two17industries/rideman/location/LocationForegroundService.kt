@@ -22,6 +22,7 @@ import com.two17industries.rideman.R
 import com.two17industries.rideman.core.LocationSample
 import com.two17industries.rideman.dash.DashBroadcaster
 import com.two17industries.rideman.data.SettingsStore
+import com.two17industries.rideman.hrm.HrmBleClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -35,13 +36,15 @@ class LocationForegroundService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var broadcaster: DashBroadcaster? = null
+    private var hrm: HrmBleClient? = null
 
-    // Synchronous idempotence guard for broadcaster creation. onStartCommand can be re-entered
-    // (e.g. a double-tap of "start ride" fires startForegroundService twice on an already-running
-    // service); settings.first() suspends, so a null-check on `broadcaster` from inside the
-    // launch below is itself racy — both launches could pass the check before either assigns.
-    // This flag must be set synchronously, before the coroutine suspends, to actually prevent
-    // a second DashBroadcaster (and thus a second 1 Hz GATT writer) from being created.
+    // Synchronous idempotence guard for broadcaster/HRM client creation. onStartCommand can be
+    // re-entered (e.g. a double-tap of "start ride" fires startForegroundService twice on an
+    // already-running service); settings.first() suspends, so a null-check on `broadcaster` or
+    // `hrm` from inside the launch below is itself racy — both launches could pass the check
+    // before either assigns. This flag must be set synchronously, before the coroutine
+    // suspends, to actually prevent a second DashBroadcaster (and thus a second 1 Hz GATT
+    // writer) or a second HrmBleClient from being created.
     private var dashRequested = false
 
     private val callback = object : LocationCallback() {
@@ -85,8 +88,12 @@ class LocationForegroundService : Service() {
         if (!dashRequested) {
             dashRequested = true
             scope.launch {
-                if (SettingsStore(applicationContext).settings.first().dashEnabled) {
+                val settings = SettingsStore(applicationContext).settings.first()
+                if (settings.dashEnabled) {
                     broadcaster = DashBroadcaster(applicationContext, scope).also { it.start() }
+                }
+                if (settings.hrmEnabled) {
+                    hrm = HrmBleClient(applicationContext, scope).also { it.start(settings.hrmAddress) }
                 }
             }
         }
@@ -112,6 +119,8 @@ class LocationForegroundService : Service() {
         client.removeLocationUpdates(callback)
         broadcaster?.stop()
         broadcaster = null
+        hrm?.stop()
+        hrm = null
         scope.cancel()
         super.onDestroy()
     }

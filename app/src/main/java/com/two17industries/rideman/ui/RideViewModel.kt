@@ -4,7 +4,9 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.two17industries.rideman.core.LocationSample
+import com.two17industries.rideman.core.CalibrationSample
+import com.two17industries.rideman.core.HeartRateStamp
+import com.two17industries.rideman.core.MaxHeartRate
 import com.two17industries.rideman.core.RideSummary
 import com.two17industries.rideman.core.RideTracker
 import com.two17industries.rideman.core.TrackedPoint
@@ -12,11 +14,13 @@ import com.two17industries.rideman.data.RidemanDatabase
 import com.two17industries.rideman.data.RidemanSettings
 import com.two17industries.rideman.data.RideRepository
 import com.two17industries.rideman.data.SettingsStore
+import com.two17industries.rideman.data.effectiveMaxHeartRate
 import com.two17industries.rideman.core.Plan
 import com.two17industries.rideman.core.PlanAttempt
 import com.two17industries.rideman.core.PlanProgress
 import com.two17industries.rideman.data.PlanLoader
 import com.two17industries.rideman.data.RideEntity
+import com.two17industries.rideman.hrm.HrmBus
 import com.two17industries.rideman.location.LocationBus
 import com.two17industries.rideman.location.LocationForegroundService
 import com.two17industries.rideman.sensor.SensorRepository
@@ -25,6 +29,8 @@ import com.two17industries.rideman.strava.StravaAuth
 import com.two17industries.rideman.strava.StravaTokenStore
 import com.two17industries.rideman.strava.StravaUploadScheduler
 import com.two17industries.rideman.BuildConfig
+import java.util.Calendar
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +41,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class RideUiState(
     val speedMps: Float = 0f,
@@ -42,6 +49,8 @@ data class RideUiState(
     val headingDeg: Float = 0f,
     val altitudeM: Double = 0.0,
     val elapsedMs: Long = 0L,
+    /** Live BPM, or null when no strap is connected or its reading has gone stale. */
+    val heartRateBpm: Int? = null,
 )
 
 class RideViewModel(app: Application) : AndroidViewModel(app) {
@@ -136,7 +145,9 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
 
     private var tracker: RideTracker? = null
     private var startMillis: Long = 0L
-    private val track = mutableListOf<LocationSample>()
+    private val track = mutableListOf<TrackedPoint>()
+    /** Every strap reading this ride, for the max-HR auto-raise check at save time. */
+    private val hrSamples = mutableListOf<CalibrationSample>()
     private var lastSummary: RideSummary? = null
     private val collectorJobs = mutableListOf<Job>()
 
@@ -162,6 +173,8 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
         altitudeOffset = 0.0
         altitudeOffsetInit = false
         LocationBus.reset()
+        HrmBus.reset()
+        hrSamples.clear()
         LocationForegroundService.start(getApplication())
         collectorJobs += collectLocation()
         collectorJobs += collectSensors()
@@ -173,7 +186,8 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
             sample ?: return@collect
             val t = tracker ?: return@collect
             t.add(sample)
-            track.add(sample)
+            val bpm = HeartRateStamp.bpmFor(sample.epochMillis, HrmBus.latest.value)
+            track.add(TrackedPoint(sample, bpm))
             sample.gpsAltitudeM?.let { gpsAlt ->
                 lastGpsAltitude = gpsAlt
                 baroAltitudeRaw?.let { baro ->
@@ -192,6 +206,7 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
                 distanceM = t.distanceM,
                 headingDeg = sample.headingDeg,
                 altitudeM = displayedAltitude(),
+                heartRateBpm = bpm,
             )
         }
     }
@@ -222,6 +237,15 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
                 _ui.value = _ui.value.copy(altitudeM = displayedAltitude())
             }
         },
+        viewModelScope.launch {
+            HrmBus.latest.collect { hr ->
+                hr ?: return@collect
+                hrSamples.add(CalibrationSample(hr.epochMillis, hr.bpm, hr.contactOk))
+                _ui.value = _ui.value.copy(
+                    heartRateBpm = if (hr.contactOk) hr.bpm else null,
+                )
+            }
+        },
     )
 
     /** Best available altitude: GPS-anchored barometer, raw barometer, or GPS alone. */
@@ -247,18 +271,42 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
 
     fun persistLastRide() {
         val summary = lastSummary ?: return
-        // heartRateBpm is a placeholder null: this task moves the storage layer ahead of the
-        // collection layer. The ride-wiring task replaces this with real readings collected
-        // from HrmBus and stamped fresh via HeartRateStamp.
-        val snapshot = track.map { TrackedPoint(it, heartRateBpm = null) }
+        val snapshot = track.toList()
         viewModelScope.launch {
             val rideId = repo.saveRide(summary, snapshot, activePlanRideId)
+            maybeRaiseMaxHeartRate()
             if (settings.value.stravaUploadEnabled && stravaStore.isConnected) {
                 val ride = repo.getRide(rideId) ?: return@launch
                 repo.markQueued(rideId, ride)
                 StravaUploadScheduler.enqueue(getApplication(), rideId)
             }
         }
+    }
+
+    data class MaxHrRaise(val from: Int?, val to: Int)
+
+    private val _maxHrRaised = MutableStateFlow<MaxHrRaise?>(null)
+    val maxHrRaised: StateFlow<MaxHrRaise?> = _maxHrRaised.asStateFlow()
+
+    fun clearMaxHrRaised() { _maxHrRaised.value = null }
+
+    /**
+     * Raise the stored max HR if this ride corroborated a higher one. Never lowers. Raising
+     * moves every zone boundary, including on past rides, so the rider is told.
+     */
+    private suspend fun maybeRaiseMaxHeartRate() {
+        // corroboratedPeak is O(n^2) in the worst case and a real strap notifies on the
+        // heartbeat, not at 1 Hz — a two-hour ride is 15-20k samples. viewModelScope defaults
+        // to the Main dispatcher, so this MUST be moved off it or ride save janks the UI.
+        val candidate = withContext(Dispatchers.Default) {
+            MaxHeartRate.corroboratedPeak(hrSamples.toList())
+        } ?: return
+        val current = settings.value
+        val year = Calendar.getInstance().get(Calendar.YEAR)
+        val existing = current.effectiveMaxHeartRate(year)
+        if (existing != null && candidate <= existing) return
+        settingsStore.save(current.copy(maxHeartRateBpm = candidate))
+        _maxHrRaised.value = MaxHrRaise(from = existing, to = candidate)
     }
 
     fun saveSettings(updated: RidemanSettings) {

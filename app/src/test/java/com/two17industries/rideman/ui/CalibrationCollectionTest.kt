@@ -78,6 +78,91 @@ class CalibrationCollectionTest {
     }
 
     @Test
+    fun `the collection window is anchored to the first sample not the start tap`() {
+        // Tap at 0, first notification at 2_000. At wall-clock 10_000 the window has been open
+        // for 8_000, not 10_000 — the strap's start-up latency is not charged against it.
+        assertEquals(
+            8_000L,
+            CalibrationCollection.collectedMs(nowMs = 10_000, firstSampleAtMs = 2_000, startedAtMs = 0),
+        )
+    }
+
+    @Test
+    fun `before any sample arrives the tap stands in as the anchor`() {
+        // Otherwise a strap that never reports would hold the window open forever.
+        assertEquals(
+            10_000L,
+            CalibrationCollection.collectedMs(nowMs = 10_000, firstSampleAtMs = null, startedAtMs = 0),
+        )
+    }
+
+    @Test
+    fun `a session ends with a span the reducer accepts at every plausible strap rate`() {
+        // The regression this guards: the window used to start at the START tap, so the
+        // strap's first-notification latency came straight out of the collected span. A 2 s
+        // strap lost roughly 4 s, blew through the overshoot cap still short, and a rider who
+        // sat perfectly still for five minutes was told they stopped early.
+        //
+        // 3 s is the limit of what the 2 s cap can absorb: the loop has a window of
+        // MAX_OVERSHOOT_MS + 1_000 ms in which a notification must land, so an interval wider
+        // than that can straddle it. No consumer strap notifies that slowly.
+        // The phase sweep matters: a real strap's notifications are not aligned to the tap, and
+        // the old tap-anchored window's deficit depended on that phase (up to two intervals in
+        // the worst case). Anchoring on the first sample makes the outcome phase-independent,
+        // which is precisely what these iterations assert.
+        for (interval in listOf(250L, 500L, 1_000L, 2_000L, 2_200L, 3_000L)) {
+            for (phase in 1..interval.toInt() step 137) {
+                val span = simulateSession(notifyIntervalMs = interval, firstNotifyAtMs = phase.toLong())
+                assertTrue(
+                    "a strap notifying every ${interval}ms, first at ${phase}ms, ended $span — " +
+                        "under the reducer's ${CalibrationCollection.REQUIRED_SPAN_MS} gate",
+                    span >= CalibrationCollection.REQUIRED_SPAN_MS,
+                )
+            }
+        }
+    }
+
+    /**
+     * Runs the screen's collection loop against a synthetic strap notifying every
+     * [notifyIntervalMs] starting at [firstNotifyAtMs], and returns the sample span the reducer
+     * would be handed.
+     *
+     * Mirrors the loop in HeartRateCalibrationScreen: tap at 0, a 250 ms poll tick, and the
+     * window anchored on the first sample's arrival.
+     */
+    private fun simulateSession(
+        notifyIntervalMs: Long,
+        firstNotifyAtMs: Long,
+        tickMs: Long = 250L,
+    ): Long {
+        val tappedAt = 0L
+        var now = tappedAt
+        var anchor: Long? = null
+        var nextNotify = firstNotifyAtMs
+        var first: Long? = null
+        var last: Long? = null
+        var collected = 0L
+        var guard = 0
+
+        while (
+            CalibrationCollection.shouldKeepCollecting(
+                elapsedMs = collected,
+                sampleSpanMs = if (first == null || last == null) 0L else last!! - first!!,
+            )
+        ) {
+            check(guard++ < 10_000) { "collection loop did not terminate" }
+            now += tickMs
+            while (nextNotify <= now) {
+                if (first == null) { first = nextNotify; anchor = nextNotify }
+                last = nextNotify
+                nextNotify += notifyIntervalMs
+            }
+            collected = CalibrationCollection.collectedMs(now, anchor, tappedAt)
+        }
+        return if (first == null || last == null) 0L else last!! - first!!
+    }
+
+    @Test
     fun `span of an empty or single-sample session is zero`() {
         assertTrue(CalibrationCollection.spanMs(emptyList()) == 0L)
         assertTrue(CalibrationCollection.spanMs(listOf(sample(1_000))) == 0L)

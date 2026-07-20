@@ -131,7 +131,18 @@ fun HeartRateCalibrationScreen(
         // elapsedRealtime, not currentTimeMillis: the latter is not monotonic, and an NTP
         // correction mid-session would stall the loop (backward jump) or end it early (forward
         // jump). Sample stamps stay on epochMillis — the reducer compares against those.
-        val startedAt = SystemClock.elapsedRealtime()
+        val tappedAt = SystemClock.elapsedRealtime()
+
+        // Span accounting is anchored to the arrival of the *first sample*, not to the START
+        // tap. The gap between the two scales with the strap's notification interval, and it
+        // used to be charged against the collection window: a 2 s strap left the data roughly
+        // 4 s short of the reducer's gate, past the overshoot cap, so a rider who sat perfectly
+        // still for five minutes was told they stopped early. Anchoring here removes that gap
+        // entirely, leaving only the trailing one, which the cap covers.
+        //
+        // Null until the first sample lands; until then the wall clock from the tap stands in,
+        // so a strap that never reports still ends the session instead of hanging it.
+        var collectionAnchor: Long? = null
 
         // Collected, not polled: a 250 ms poll of HrmBus.latest can miss a reading that is
         // superseded between ticks. The epochMillis dedupe still guards against a conflated
@@ -139,20 +150,27 @@ fun HeartRateCalibrationScreen(
         val collector = launch {
             HrmBus.latest.collect { hr ->
                 if (hr != null && samples.lastOrNull()?.epochMillis != hr.epochMillis) {
+                    if (collectionAnchor == null) collectionAnchor = SystemClock.elapsedRealtime()
                     samples.add(CalibrationSample(hr.epochMillis, hr.bpm, hr.contactOk))
                 }
             }
         }
 
+        // Distinct from elapsedMs: that one drives the countdown and must still start at 5:00
+        // the instant the rider taps START. This one sizes the collection window.
+        var collectedMs = 0L
+
         while (
             !stopRequested &&
             CalibrationCollection.shouldKeepCollecting(
-                elapsedMs = elapsedMs,
+                elapsedMs = collectedMs,
                 sampleSpanMs = CalibrationCollection.spanMs(samples),
             )
         ) {
             delay(250)
-            elapsedMs = SystemClock.elapsedRealtime() - startedAt
+            val now = SystemClock.elapsedRealtime()
+            elapsedMs = now - tappedAt
+            collectedMs = CalibrationCollection.collectedMs(now, collectionAnchor, tappedAt)
         }
         collector.cancel()
 

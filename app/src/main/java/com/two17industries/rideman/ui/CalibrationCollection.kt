@@ -33,6 +33,25 @@ object CalibrationCollection {
      */
     const val MAX_OVERSHOOT_MS = 2_000L
 
+    /**
+     * How long the collection window has been open, in the clock [shouldKeepCollecting] expects.
+     *
+     * Anchored to the arrival of the *first sample*, not to the START tap. The gap between those
+     * two scales with the strap's notification interval, and charging it against the window is
+     * what made a slower strap fail: at 2 Hz-and-slower the data finished several seconds short
+     * of the reducer's gate, past [MAX_OVERSHOOT_MS], and a rider who sat perfectly still for
+     * five minutes was told they stopped early. Anchoring on the first sample removes that
+     * leading gap outright, leaving only the trailing one for the overshoot to absorb.
+     *
+     * Before any sample arrives [firstSampleAtMs] is null and the tap stands in, so a strap that
+     * never reports ends the session on the wall clock rather than hanging it forever.
+     *
+     * This does not move the countdown, which stays anchored to the tap and still reads 5:00 the
+     * instant the rider presses START.
+     */
+    fun collectedMs(nowMs: Long, firstSampleAtMs: Long?, startedAtMs: Long): Long =
+        nowMs - (firstSampleAtMs ?: startedAtMs)
+
     /** True while the session should keep collecting samples. */
     fun shouldKeepCollecting(elapsedMs: Long, sampleSpanMs: Long): Boolean = when {
         // Inside the nominal five minutes: always collecting.

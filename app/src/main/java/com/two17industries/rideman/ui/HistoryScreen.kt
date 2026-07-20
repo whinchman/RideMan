@@ -76,7 +76,7 @@ fun HistoryScreen(
     // retroactively, so it is recomputed from raw samples every time a row expands.
     maxHr: Int?,
     baselineHr: Int?,
-    loadHeartRateSamples: suspend (Long) -> List<Pair<Long, Int>>,
+    loadHeartRateSamples: suspend (Long) -> List<Pair<Long, Int?>>,
 ) {
     var expandedId by remember { mutableStateOf<Long?>(null) }
 
@@ -238,7 +238,7 @@ private fun RideRow(
     onDelete: () -> Unit,
     maxHr: Int?,
     baselineHr: Int?,
-    loadHeartRateSamples: suspend (Long) -> List<Pair<Long, Int>>,
+    loadHeartRateSamples: suspend (Long) -> List<Pair<Long, Int?>>,
 ) {
     val planRide = ride.planRideId?.let { plan?.byId?.get(it) }
     val dist = String.format(Locale.US, "%.1f", Units.distance(ride.distanceM, units))
@@ -354,7 +354,7 @@ private fun ZoneBreakdown(
     rideId: Long,
     maxHr: Int?,
     baselineHr: Int?,
-    loadSamples: suspend (Long) -> List<Pair<Long, Int>>,
+    loadSamples: suspend (Long) -> List<Pair<Long, Int?>>,
 ) {
     if (maxHr == null) {
         Text(

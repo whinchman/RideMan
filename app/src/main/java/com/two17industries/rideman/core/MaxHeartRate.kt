@@ -23,8 +23,12 @@ object MaxHeartRate {
      * rate, and a dropped packet can leave a gap in an otherwise-continuous run. A gap longer
      * than this means the run was not continuously observed and cannot be treated as sustained.
      * Five seconds is a judgement call, not a value from any spec.
+     *
+     * Shared with [HeartRateZones.timeInZoneMs], which asks the same question of the same data
+     * — "were these two samples continuously observed?" — and must give the same answer. This
+     * is the single definition; do not introduce a second gap constant.
      */
-    private const val MAX_GAP_MS = 5_000L
+    const val MAX_GAP_MS = 5_000L
 
     private const val FLOOR_BPM = 120
     private const val CEILING_BPM = 220

@@ -124,13 +124,17 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * (timestamp, bpm) for every fix in [rideId] that carried a reading.
+     * (timestamp, bpm) for **every** fix in [rideId], with a null bpm where the strap gave no
+     * reading. The nulls are deliberately preserved rather than filtered out: dropping them
+     * would close the gaps up and leave the consumer unable to tell a continuous stretch from
+     * one interrupted by a dead strap, which is how a dropout would get credited as training
+     * time. [HeartRateZones.timeInZoneMs] is what reads the nulls.
      *
      * Loaded on demand rather than stored, because an auto-raised max HR moves every zone
      * boundary and would make a cached breakdown wrong for past rides.
      */
-    suspend fun heartRateSamples(rideId: Long): List<Pair<Long, Int>> =
-        repo.trackPoints(rideId).mapNotNull { p -> p.heartRateBpm?.let { p.timestamp to it } }
+    suspend fun heartRateSamples(rideId: Long): List<Pair<Long, Int?>> =
+        repo.trackPoints(rideId).map { p -> p.timestamp to p.heartRateBpm }
 
     /** Derived plan progress, or null if there is no loaded plan. */
     val progress: StateFlow<PlanProgress?> =

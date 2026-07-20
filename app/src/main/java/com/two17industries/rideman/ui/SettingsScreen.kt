@@ -604,7 +604,7 @@ private fun screenName(screen: RideScreen): String = when (screen) {
     RideScreen.COMPASS -> "Compass"
     RideScreen.ALTITUDE -> "Altitude"
     RideScreen.CADENCE -> "Cadence"
-    RideScreen.HEART_RATE -> "HEART RATE"
+    RideScreen.HEART_RATE -> "Heart Rate"
 }
 
 private fun themeName(choice: ThemeChoice): String = when (choice) {

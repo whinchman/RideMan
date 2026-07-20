@@ -66,9 +66,11 @@ class ScreenOrderTest {
     }
 
     @Test
-    fun `a deliberately disabled heart rate page is not resurrected`() {
-        // Same rule the GRID migration follows: the flag decides, not the absence.
-        val saved = listOf(RideScreen.GRID, RideScreen.SPEED)
+    fun `a heart rate page the user moved is left where they put it`() {
+        // Same rule the GRID migration follows: the flag decides, not the position. Heart rate
+        // sits mid-order here rather than at the end, where the append would have left it, so a
+        // migration that re-ran and re-appended would be caught.
+        val saved = listOf(RideScreen.GRID, RideScreen.HEART_RATE, RideScreen.SPEED)
         assertEquals(saved, ScreenOrder.migrate(saved, gridMigrated = true, hrMigrated = true))
     }
 

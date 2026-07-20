@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.two17industries.rideman.core.LocationSample
 import com.two17industries.rideman.core.RideSummary
 import com.two17industries.rideman.core.RideTracker
+import com.two17industries.rideman.core.TrackedPoint
 import com.two17industries.rideman.data.RidemanDatabase
 import com.two17industries.rideman.data.RidemanSettings
 import com.two17industries.rideman.data.RideRepository
@@ -246,7 +247,10 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
 
     fun persistLastRide() {
         val summary = lastSummary ?: return
-        val snapshot = track.toList()
+        // heartRateBpm is a placeholder null: this task moves the storage layer ahead of the
+        // collection layer. The ride-wiring task replaces this with real readings collected
+        // from HrmBus and stamped fresh via HeartRateStamp.
+        val snapshot = track.map { TrackedPoint(it, heartRateBpm = null) }
         viewModelScope.launch {
             val rideId = repo.saveRide(summary, snapshot, activePlanRideId)
             if (settings.value.stravaUploadEnabled && stravaStore.isConnected) {

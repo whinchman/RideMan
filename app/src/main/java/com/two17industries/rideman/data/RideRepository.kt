@@ -1,7 +1,7 @@
 package com.two17industries.rideman.data
 
-import com.two17industries.rideman.core.LocationSample
 import com.two17industries.rideman.core.RideSummary
+import com.two17industries.rideman.core.TrackedPoint
 import com.two17industries.rideman.strava.StravaExternalId
 import kotlinx.coroutines.flow.Flow
 
@@ -13,9 +13,10 @@ class RideRepository(private val dao: RideDao) {
 
     suspend fun saveRide(
         summary: RideSummary,
-        track: List<LocationSample>,
+        track: List<TrackedPoint>,
         planRideId: String? = null,
     ): Long {
+        val (avgHr, maxHr) = RideHeartRateStats.summarize(track.map { it.heartRateBpm })
         val ride = RideEntity(
             startedAt = summary.startedAtMillis,
             endedAt = summary.endedAtMillis,
@@ -24,8 +25,11 @@ class RideRepository(private val dao: RideDao) {
             maxSpeedMps = summary.maxSpeedMps,
             avgSpeedMps = summary.avgSpeedMps,
             planRideId = planRideId,
+            avgHeartRateBpm = avgHr,
+            maxHeartRateBpm = maxHr,
         )
-        val points = track.map {
+        val points = track.map { tp ->
+            val it = tp.sample
             TrackPointEntity(
                 rideId = 0,
                 timestamp = it.epochMillis,
@@ -35,6 +39,7 @@ class RideRepository(private val dao: RideDao) {
                 speedMps = it.speedMps ?: 0f,
                 headingDeg = it.headingDeg,
                 accuracyM = it.accuracyM,
+                heartRateBpm = tp.heartRateBpm,
             )
         }
         return dao.insertRideWithTrack(ride, points)

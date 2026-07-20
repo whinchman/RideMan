@@ -18,4 +18,6 @@ data class RideEntity(
     val stravaActivityId: Long? = null,
     val stravaExternalId: String? = null,
     val stravaError: String? = null,
+    val avgHeartRateBpm: Int? = null,
+    val maxHeartRateBpm: Int? = null,
 )

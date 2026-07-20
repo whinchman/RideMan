@@ -29,4 +29,9 @@ data class TrackPointEntity(
      * recorded before schema v4, which never captured it).
      */
     val accuracyM: Float? = null,
+    /**
+     * Heart rate at this fix, or null when no strap reading was fresh (within 5s and with
+     * sensor contact). Null for every point recorded before schema v5.
+     */
+    val heartRateBpm: Int? = null,
 )

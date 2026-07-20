@@ -8,7 +8,7 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [RideEntity::class, TrackPointEntity::class], version = 4, exportSchema = false)
+@Database(entities = [RideEntity::class, TrackPointEntity::class], version = 5, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class RidemanDatabase : RoomDatabase() {
     abstract fun rideDao(): RideDao
@@ -43,13 +43,26 @@ abstract class RidemanDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds heart rate. Nullable throughout: rides recorded before v5 have no strap data
+         * and can never acquire it, and within a v5 ride any fix without a fresh reading
+         * legitimately stays null.
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE track_points ADD COLUMN heartRateBpm INTEGER")
+                db.execSQL("ALTER TABLE rides ADD COLUMN avgHeartRateBpm INTEGER")
+                db.execSQL("ALTER TABLE rides ADD COLUMN maxHeartRateBpm INTEGER")
+            }
+        }
+
         fun get(context: Context): RidemanDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     RidemanDatabase::class.java,
                     "rideman.db",
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build().also { instance = it }
             }
     }

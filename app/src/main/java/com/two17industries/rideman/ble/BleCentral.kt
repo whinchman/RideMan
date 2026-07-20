@@ -603,7 +603,12 @@ class BleCentral(
     private fun stopScan() {
         if (!scanning) return
         scanning = false
-        if (hasPermissions()) scanner?.stopScan(scanCallback)
+        // hasPermissions() is a race, not a fence: the permission can be revoked between the
+        // check and the call. stopScan() runs from onScanResult, i.e. inside a main-looper
+        // dispatch, so an uncaught SecurityException here kills the process mid-ride. Failing
+        // to unregister is harmless — onScanResult's `gatt != null` guard absorbs any results
+        // that keep arriving.
+        if (hasPermissions()) runCatching { scanner?.stopScan(scanCallback) }
     }
 
     /** Retries forever; [BackoffPolicy] pins the wait at 30s rather than ever giving up. */

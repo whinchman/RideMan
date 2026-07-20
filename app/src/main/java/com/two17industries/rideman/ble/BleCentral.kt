@@ -160,9 +160,11 @@ class BleCentral(
     @Volatile private var firstNotifyDone = false
 
     /**
-     * Cancellable timeout for the SERVICE DISCOVERY stage, armed when `discoverServices()`
-     * returns true and cancelled by [onServicesDiscovered]. Same [Volatile] rationale and same
-     * binder-thread reality as [firstNotifyJob] — see the threading note on [retryJob].
+     * Cancellable timeout for the SERVICE DISCOVERY stage, armed immediately BEFORE
+     * `discoverServices()` is called and cancelled by [onServicesDiscovered]. Same [Volatile]
+     * rationale and same binder-thread reality as [firstNotifyJob] — see the threading note on
+     * [retryJob]. Arming before rather than after the request is what stops a fast-path
+     * callback's stand-down write being lost; see the arming site in [onConnectionStateChange].
      *
      * `discoverServices()` returning false is handled inline, but the twin failure is the one
      * that strands a ride: it returns true, the request is queued, and [onServicesDiscovered]
@@ -179,6 +181,11 @@ class BleCentral(
      * because it is bounded by service discovery — a stage every consumer completes identically
      * — and not by any notification. See [onServicesDiscovered], which cancels it before
      * consulting the listener at all.
+     *
+     * That claim was FALSE while this timer was armed after `discoverServices()` returned: the
+     * dash reaches discovery on exactly the same path as the strap, so a lost stand-down write
+     * on the cached-services fast path would tear the dash down 10s into a healthy connection.
+     * It holds now only because the arming precedes the request. Do not re-order it.
      */
     @Volatile private var discoveryJob: Job? = null
 
@@ -284,6 +291,20 @@ class BleCentral(
                     BluetoothAdapter.STATE_OFF -> {
                         scanning = false
                         status.set(BleConnectionState.BLUETOOTH_OFF)
+                        // A live connection here had no local bound at all: `gatt` was left
+                        // pinned and nothing armed, delegating teardown entirely to the platform
+                        // delivering STATE_DISCONNECTED. Most stacks do — but "the callback might
+                        // not come" is the premise every timer in this class was added on, and no
+                        // disconnect() was issued here so the bounding helper never ran. If it
+                        // does not arrive, a later STATE_ON starts a scan, a result arrives, and
+                        // onScanResult's `if (gatt != null) return` refuses re-entry for the rest
+                        // of the ride.
+                        //
+                        // The helper is already correct for an adapter-down state: it skips the
+                        // disconnect() when permissions are missing and arms the timer either
+                        // way, so the teardown completes locally at 5s regardless of whether the
+                        // stack is in any condition to answer.
+                        gatt?.let { disconnectAndArmTeardown(it) }
                     }
                 }
             }
@@ -355,9 +376,28 @@ class BleCentral(
         // ERROR_DEVICE_NOT_CONNECTED, ERROR_PROFILE_SERVICE_NOT_BOUND). When it does, nothing
         // is queued, so onDescriptorWrite never fires and its disconnect-on-failure recovery
         // never runs. Discarding this value is exactly how "connected but silent" happens.
+        //
+        // ARMED BEFORE THE WRITE, for the same reason the discovery timeout is — see the
+        // comment at its arming site in onConnectionStateChange. Arming after the request lets
+        // a fast-path callback's stand-down write be overwritten by the arming thread's
+        // `firstNotifyDone = false`, after which the tail tears down a healthy connection. This
+        // stage does self-heal (onCharacteristicChanged re-sets the flag on EVERY notification,
+        // not just the first), so the inversion here is for symmetry with the stage that
+        // cannot; it is not load-bearing on its own.
+        armFirstNotifyWatchdog(g)
         val issued = g.writeDescriptor(cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) ==
             BluetoothStatusCodes.SUCCESS
-        if (issued) armFirstNotifyWatchdog(g)
+        if (!issued) {
+            // Nothing was queued, so no notification is coming and the watchdog just armed has
+            // no stage left to bound. Stand it down rather than let it fire 10s later at a
+            // connection the caller is about to refuse anyway. Flag first, then compare before
+            // nulling the shared field — the same treatment the tails get, so a successor's
+            // watchdog reference cannot be clobbered.
+            firstNotifyDone = true
+            val w = firstNotifyJob
+            w?.cancel()
+            if (firstNotifyJob === w) firstNotifyJob = null
+        }
         return issued
     }
 
@@ -508,6 +548,18 @@ class BleCentral(
         if (!hasPermissions()) {
             scanning = false
             status.set(BleConnectionState.NO_PERMISSION)
+            // Re-arm the chain, matching the `scanner == null` branch below. Without this the
+            // backoff chain DIES the first time it re-enters here: retryJob has already been
+            // nulled by the retry coroutine, so the terminal state is wantRunning true,
+            // scanning false, retryJob null and nothing left that can ever start a scan again.
+            // The two neighbouring guards are both covered — BLUETOOTH_OFF by the adapter
+            // receiver's STATE_ON, `scanner == null` by its own explicit reschedule — and this
+            // one had neither.
+            //
+            // It is also what makes subscribe()'s KDoc true: the UI converges on NO_PERMISSION
+            // "for as long as the permission is actually missing" only if this check keeps
+            // being re-run, and until now it ran once and then stopped.
+            scheduleReconnect()
             return
         }
         if (manager?.adapter?.isEnabled != true) {
@@ -581,7 +633,46 @@ class BleCentral(
             val wanted = targetAddress
             if (wanted != null && !wanted.equals(result.device.address, ignoreCase = true)) return
             stopScan()
-            val g = result.device.connectGatt(appContext, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+            // Re-checked here, not inherited from startScan(): this callback is dispatched
+            // minutes after the scan began and permission can have been revoked in between.
+            // Without it the connectGatt below throws SecurityException out of a main-looper
+            // dispatch (see the runCatching note under it).
+            if (!hasPermissions()) {
+                status.set(BleConnectionState.NO_PERMISSION)
+                return
+            }
+            // connectGatt is declared BluetoothGatt! — a platform type — so Kotlin inserts no
+            // null check and a null return compiles to a plain store of null. AOSP returns null
+            // when getBluetoothGatt() yields no service: the adapter went down between the scan
+            // result and this call, or GATT client registration failed. That is the SAME window
+            // startScan's own runCatching exists for ("the guards above are a race, not a
+            // fence").
+            //
+            // This is the only place a null return can be caught, and the reason is structural:
+            // a synchronous refusal to START the stage produces no BluetoothGatt, therefore no
+            // callback, therefore nothing for any stage timer to bound. Every other stall in
+            // this class is "the callback never came" and is caught by a timeout; this one is
+            // "the call never began" and can only be caught at the call itself.
+            //
+            // Left unhandled the ride is over: stopScan() has already run, `gatt` stays null so
+            // no cleanup path is keyed to anything, retryJob was nulled by the retry coroutine
+            // before it called startScan, and nothing schedules another attempt — wantRunning
+            // true, scanning false, retryJob null, status frozen on SCANNING for the whole ride.
+            // The closedGatt unpin block below does not rescue it either: with both null,
+            // `closedGatt === g` takes the branch and `gatt = null` is a no-op.
+            //
+            // runCatching for the throwing variant: ScanCallback is delivered on
+            // BluetoothLeScanner's main-looper Handler, so a SecurityException from a permission
+            // revoked between the check above and this line would propagate out of a main-looper
+            // dispatch and kill the process mid-ride. Every other framework call in this class
+            // that can throw for that reason is wrapped; this one was not.
+            val g = runCatching {
+                result.device.connectGatt(appContext, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+            }.getOrNull()
+            if (g == null) {
+                scheduleReconnect()
+                return
+            }
             gatt = g
             // Re-check IMMEDIATELY after the store, and in this order. A STATE_DISCONNECTED for
             // g can be delivered on a binder thread before the line above lands — routine on an
@@ -625,7 +716,25 @@ class BleCentral(
                     // The twin failure — returning true and then never calling
                     // onServicesDiscovered — has no platform timeout behind it, so it gets an
                     // explicit one. See discoveryJob.
-                    if (!g.discoverServices()) disconnectAndArmTeardown(g) else armDiscoveryTimeout(g)
+                    //
+                    // ARMED BEFORE THE REQUEST, and the order is load-bearing. Arming's first
+                    // act is `discoveryDone = false`. Callbacks run inline on binder threads and
+                    // that pool dispatches concurrently, so on a cached-services fast path
+                    // onServicesDiscovered can complete — setting discoveryDone = true,
+                    // cancelling a still-null job, calling onReady, publishing CONNECTED —
+                    // before the arming thread executes its `discoveryDone = false`. The
+                    // stand-down write is then LOST, and 10s later the tail reads false and
+                    // tears down a healthy, fully discovered connection.
+                    //
+                    // The notify watchdog has the same shape but self-heals, because
+                    // onCharacteristicChanged re-sets its flag on every notification.
+                    // onServicesDiscovered fires exactly once per connection — there is no
+                    // second chance, so the ordering has to carry it.
+                    //
+                    // Arming first is safe on the false branch: disconnectAndArmTeardown leads
+                    // to DISCONNECTED cleanup, which sets discoveryDone = true.
+                    armDiscoveryTimeout(g)
+                    if (!g.discoverServices()) disconnectAndArmTeardown(g)
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     // close() stays unconditional: it releases THIS callback's own client

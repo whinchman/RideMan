@@ -63,13 +63,39 @@ object BaselineCalibration {
     private const val MAX_POOR_CONTACT_FRACTION = 0.10
     private const val MAX_WINDOW_STD_DEV = 5.0
 
-    fun reduce(samples: List<CalibrationSample>): CalibrationResult {
-        if (samples.isEmpty()) return CalibrationResult.Failed(CalibrationResult.Failure.TOO_SHORT)
+    /**
+     * [stoppedEarly] is the session's actual outcome: true when the rider pressed STOP, false
+     * when the session ran its full length. It is the only way to tell the two causes of a short
+     * sample span apart, and the reducer cannot derive it — the span is a property of the
+     * *data*, while the session's length is a property of the *wall clock*.
+     *
+     * Without it, a strap that dropped at minute four of a five-minute session yields a
+     * four-minute span, and a rider who sat perfectly still is told they stopped early.
+     *
+     * Defaulted to true (the historical reading, "a short span means the rider stopped") so the
+     * behavioural tests that pin the session-length gate still say what they meant. Production
+     * callers pass the real outcome explicitly.
+     */
+    fun reduce(
+        samples: List<CalibrationSample>,
+        stoppedEarly: Boolean = true,
+    ): CalibrationResult {
+        // A short span is the rider's fault only if the rider ended the session. If it ran its
+        // full length and the data is still short, the readings did not arrive — a strap
+        // problem, which is exactly what INSUFFICIENT_DATA exists to say. That case was
+        // previously unreachable, because this gate fired first and blamed the rider.
+        val shortSpanFailure = if (stoppedEarly) {
+            CalibrationResult.Failure.TOO_SHORT
+        } else {
+            CalibrationResult.Failure.INSUFFICIENT_DATA
+        }
+
+        if (samples.isEmpty()) return CalibrationResult.Failed(shortSpanFailure)
 
         val start = samples.first().epochMillis
         val elapsed = samples.last().epochMillis - start
         if (elapsed < MIN_SPAN_MS) {
-            return CalibrationResult.Failed(CalibrationResult.Failure.TOO_SHORT)
+            return CalibrationResult.Failed(shortSpanFailure)
         }
 
         val poor = samples.count { !it.contactOk }

@@ -36,8 +36,29 @@ class BaselineCalibrationTest {
 
     @Test
     fun `a session shorter than the required duration is rejected`() {
-        val r = BaselineCalibration.reduce(steady(90, 60))
+        val r = BaselineCalibration.reduce(steady(90, 60), stoppedEarly = true)
         assertEquals(CalibrationResult.Failed(CalibrationResult.Failure.TOO_SHORT), r)
+    }
+
+    /**
+     * The strap-dropout case: the session ran its full five minutes on the wall clock, but the
+     * strap died partway through, so the *data* spans only ninety seconds.
+     *
+     * The span alone cannot tell this apart from the rider stopping at ninety seconds, which is
+     * why the outcome is threaded in. Blaming the rider here ("Stopped early") is both wrong and
+     * unactionable — they sat perfectly still. INSUFFICIENT_DATA names the real problem and
+     * tells them to reseat the strap.
+     */
+    @Test
+    fun `a full-length session with a short span is a data problem, not a stopped-early one`() {
+        val r = BaselineCalibration.reduce(steady(90, 60), stoppedEarly = false)
+        assertEquals(CalibrationResult.Failed(CalibrationResult.Failure.INSUFFICIENT_DATA), r)
+    }
+
+    @Test
+    fun `a full-length session that produced no readings at all is a data problem`() {
+        val r = BaselineCalibration.reduce(emptyList(), stoppedEarly = false)
+        assertEquals(CalibrationResult.Failed(CalibrationResult.Failure.INSUFFICIENT_DATA), r)
     }
 
     /**

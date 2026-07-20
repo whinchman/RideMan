@@ -174,10 +174,18 @@ fun HeartRateCalibrationScreen(
         }
         collector.cancel()
 
+        // Which of the two loop conditions ended the session. The reducer cannot work this out:
+        // it sees only the sample span, and a strap that dies at minute four leaves a four-minute
+        // span whether the rider stopped or sat still for the full five. Captured at the exact
+        // point of exit, before anything can reset it.
+        val riderStopped = stopRequested
+
         // reduce() is O(n^2) over ~300 samples; off the main thread so the last frame of the
         // countdown does not stutter.
         val captured = samples.toList()
-        val reduced = withContext(Dispatchers.Default) { BaselineCalibration.reduce(captured) }
+        val reduced = withContext(Dispatchers.Default) {
+            BaselineCalibration.reduce(captured, stoppedEarly = riderStopped)
+        }
         result = reduced
         running = false
     }

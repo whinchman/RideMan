@@ -75,6 +75,13 @@ class BleCentral(
     /** Written from the binder thread ([stop] via the service), the main dispatcher, and the retry coroutine itself. */
     @Volatile private var retryJob: Job? = null
 
+    /**
+     * Cancellable delayed reset of [attempt], armed on every successful [onReady]. Also written
+     * from the binder thread ([stop]) and the main dispatcher (connection-state callback), so
+     * it needs the same [Volatile] treatment as [retryJob].
+     */
+    @Volatile private var readyResetJob: Job? = null
+
     fun gatt(): BluetoothGatt? = gatt
 
     fun start() {
@@ -96,6 +103,8 @@ class BleCentral(
         wantRunning = false
         retryJob?.cancel()
         retryJob = null
+        readyResetJob?.cancel()
+        readyResetJob = null
         unregisterAdapterReceiver()
         stopScan()
         gatt?.close()
@@ -250,6 +259,8 @@ class BleCentral(
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     g.close()
                     if (gatt === g) gatt = null
+                    readyResetJob?.cancel()
+                    readyResetJob = null
                     listener.onDisconnected()
                     status.set(BleConnectionState.DISCONNECTED)
                     scheduleReconnect()
@@ -259,7 +270,18 @@ class BleCentral(
 
         override fun onServicesDiscovered(g: BluetoothGatt, status_: Int) {
             if (listener.onReady(g)) {
-                attempt = 0
+                // attempt is deliberately NOT reset here. onReady is where a listener issues
+                // its subscribe(), and the CCCD write it triggers fails afterwards, routed
+                // through onDescriptorWrite -> g.disconnect() -> scheduleReconnect(). A peer
+                // that permanently rejects the CCCD write would otherwise reset attempt to 0 on
+                // every cycle, pinning the backoff at its 1s floor for the whole ride instead
+                // of climbing to the 30s ceiling the design intends. Reset only once the
+                // connection has proven durable, not merely established.
+                readyResetJob?.cancel()
+                readyResetJob = scope.launch {
+                    delay(READY_STABLE_MS)
+                    attempt = 0
+                }
                 status.set(BleConnectionState.CONNECTED)
             } else {
                 g.disconnect()
@@ -306,5 +328,13 @@ class BleCentral(
     companion object {
         /** Client Characteristic Configuration Descriptor — required to start notifications. */
         val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+
+        /**
+         * How long a connection must stay up after [onReady] before [attempt] is reset to 0.
+         * Chosen to comfortably exceed any CCCD write's round trip (well under a second), so a
+         * peer that permanently rejects the write never resets the counter, while a genuinely
+         * healthy connection resets it well before the rider would notice.
+         */
+        private const val READY_STABLE_MS = 20_000L
     }
 }

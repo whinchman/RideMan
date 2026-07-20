@@ -179,7 +179,7 @@ fun SettingsScreen(
             }
             if (dashEnabled) {
                 val label = when (dashState) {
-                    BleConnectionState.DISABLED -> "Off"
+                    BleConnectionState.DISABLED -> "Idle (starts with your ride)"
                     BleConnectionState.NO_PERMISSION -> "Bluetooth permission needed"
                     BleConnectionState.BLUETOOTH_OFF -> "Bluetooth is off"
                     BleConnectionState.SCANNING -> "Searching…"

@@ -28,7 +28,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /** Callbacks from [BleCentral] into a feature-specific client. */
 interface BleCentralListener {
@@ -72,7 +72,9 @@ class BleCentral(
     @Volatile private var scanning = false
     @Volatile private var wantRunning = false
     @Volatile private var attempt = 0
-    private var retryJob: Job? = null
+
+    /** Written from the binder thread ([stop] via the service), the main dispatcher, and the retry coroutine itself. */
+    @Volatile private var retryJob: Job? = null
 
     /**
      * A queued GATT operation and the characteristic UUID whose completion callback ends it.
@@ -81,10 +83,24 @@ class BleCentral(
     private class QueuedOp(val targetUuid: UUID, val run: (BluetoothGatt) -> Unit)
 
     private val opQueue = ConcurrentLinkedQueue<QueuedOp>()
-    private val opInFlight = AtomicBoolean(false)
 
-    /** UUID of the operation currently in flight, or null when the queue is idle. */
-    @Volatile private var inFlightUuid: UUID? = null
+    /**
+     * The in-flight slot AND its tag, fused into one atomic so the two can never skew.
+     *
+     * A previous shape kept an AtomicBoolean flag beside a @Volatile UUID and released them
+     * separately; a completing thread could free the flag, let another thread acquire and tag
+     * the next op, and only then null the UUID — clobbering the new tag and stalling the queue
+     * forever. One cell, one CAS, no window.
+     *
+     * INVARIANT: null means idle. [RESERVED] means "acquired by a drain() that has not yet
+     * decided which op it is running" — no real characteristic UUID, so no callback can match
+     * it and steal the release. Any other value is the targetUuid of the op actually issued,
+     * and ONLY a callback carrying that same UUID may release it (back to null).
+     *
+     * Ownership rule: a thread may write this field non-atomically (plain set) only while it
+     * holds the slot, i.e. between a successful acquiring CAS and its release.
+     */
+    private val inFlight = AtomicReference<UUID?>(null)
 
     fun gatt(): BluetoothGatt? = gatt
 
@@ -112,8 +128,7 @@ class BleCentral(
         gatt?.close()
         gatt = null
         opQueue.clear()
-        inFlightUuid = null
-        opInFlight.set(false)
+        inFlight.set(null)
         status.set(BleConnectionState.DISABLED)
     }
 
@@ -163,7 +178,8 @@ class BleCentral(
             val cccd = characteristic.getDescriptor(CCCD_UUID)
             if (cccd == null) {
                 // No CCCD: no callback is coming, so complete synchronously. We are inside
-                // drain(), so inFlightUuid is this characteristic and the tag check passes.
+                // drain(), which tagged the slot with this characteristic's UUID before
+                // calling us, so the release CAS matches and the queue keeps moving.
                 operationComplete(characteristic.uuid)
             } else {
                 // API 33+ overload: value is passed rather than staged on the descriptor.
@@ -174,20 +190,25 @@ class BleCentral(
 
     private fun drain() {
         val g = gatt ?: return
-        if (!opInFlight.compareAndSet(false, true)) return
+        // Acquire the slot as RESERVED. Losing this CAS means someone else owns the slot; they
+        // are responsible for draining what we just enqueued when they release (see below).
+        if (!inFlight.compareAndSet(null, RESERVED)) return
         val op = opQueue.poll()
         if (op == null) {
-            opInFlight.set(false)
+            // We own the slot, so a plain set is safe: no one else can be writing this field.
+            inFlight.set(null)
             // LOST-WAKEUP GUARD — do not "simplify" this away. Without the re-check:
-            // thread A (in operationComplete) wins the CAS and polls null; thread B enqueues
-            // and calls drain(), whose CAS fails because A still holds the flag, so B returns;
-            // A then clears the flag. The queue is now non-empty with nothing in flight and
-            // nobody left to drain it. A subscription flow has no later enqueue() to rescue
-            // it, so the strap would connect and stay silent for the whole ride.
+            // thread A wins the CAS and polls null; thread B enqueues and calls drain(), whose
+            // CAS fails because A still holds the slot, so B returns; A then releases. The
+            // queue is now non-empty with nothing in flight and nobody left to drain it. A
+            // subscription flow has no later enqueue() to rescue it, so the strap would
+            // connect and stay silent for the whole ride.
             if (opQueue.isNotEmpty()) drain()
             return
         }
-        inFlightUuid = op.targetUuid
+        // Re-tag RESERVED -> the op's UUID before issuing it. Safe as a plain set for the same
+        // reason, and it must happen BEFORE op.run so a callback can never beat the tag.
+        inFlight.set(op.targetUuid)
         op.run(g)
     }
 
@@ -197,12 +218,17 @@ class BleCentral(
      * design); those writes raise onCharacteristicWrite too, and advancing on one would consume
      * the in-flight slot of a queued CCCD write and leave the strap connected but silent.
      * Matching on the tag set in [drain] makes that impossible, rather than merely unlikely.
+     *
+     * Release is a single CAS from our own tag to null: it both proves we were the in-flight
+     * op and frees the slot in one step, so nothing we do afterwards can touch a slot that has
+     * since been re-acquired by another thread.
      */
     private fun operationComplete(uuid: UUID?) {
-        if (uuid == null || uuid != inFlightUuid) return
-        if (!opInFlight.compareAndSet(true, false)) return
-        inFlightUuid = null
-        drain()
+        if (uuid == null) return
+        if (!inFlight.compareAndSet(uuid, null)) return
+        // Same lost-wakeup guard, from the other side: an enqueue that raced our release saw a
+        // busy slot and returned, trusting us to pick its op up here.
+        if (opQueue.isNotEmpty()) drain()
     }
 
     private fun startScan() {
@@ -221,8 +247,15 @@ class BleCentral(
             return
         }
         val s = scanner ?: run {
+            // getBluetoothLeScanner() returns null whenever the adapter is not in STATE_ON, so
+            // reaching here means the adapter went down between the isEnabled check above and
+            // this getter — a teardown race, not a permanent condition. BLUETOOTH_OFF is
+            // therefore accurate (the stale part is the check, not the status). Re-arm the
+            // chain ourselves: if the adapter never fully reached STATE_OFF there is no
+            // STATE_ON broadcast coming, and without this the scan would stall for the ride.
             scanning = false
             status.set(BleConnectionState.BLUETOOTH_OFF)
+            scheduleReconnect()
             return
         }
         if (scanning) return
@@ -290,8 +323,7 @@ class BleCentral(
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     opQueue.clear()
-                    inFlightUuid = null
-                    opInFlight.set(false)
+                    inFlight.set(null)
                     g.close()
                     if (gatt === g) gatt = null
                     listener.onDisconnected()
@@ -346,5 +378,12 @@ class BleCentral(
     companion object {
         /** Client Characteristic Configuration Descriptor — required to start notifications. */
         val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+
+        /**
+         * Sentinel for [inFlight]: the slot is held by a drain() that has not yet picked its op.
+         * The all-zero UUID is not assignable to a real characteristic, so no callback can
+         * match it — the slot stays exclusively ours across the poll.
+         */
+        private val RESERVED: UUID = UUID(0L, 0L)
     }
 }

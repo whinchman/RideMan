@@ -58,6 +58,11 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    // Declared explicitly, not leaned on transitively: HrmPickerDialog uses
+    // androidx.lifecycle.compose.LocalLifecycleOwner from here, and it currently arrives only
+    // via navigation-compose -- which nothing in this app actually uses (Nav.kt is a hand-rolled
+    // `when`). Dropping that unused dependency would otherwise break the build.
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.service)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))

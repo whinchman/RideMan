@@ -6,9 +6,6 @@ import org.junit.Test
 
 class MaxHeartRateTest {
 
-    private fun samples(vararg pairs: Pair<Int, Int>, contactOk: Boolean = true) =
-        pairs.map { (sec, bpm) -> CalibrationSample(sec * 1000L, bpm, contactOk) }
-
     @Test
     fun `age estimate is 220 minus age`() {
         assertEquals(180, MaxHeartRate.estimateFromAge(birthYear = 1986, currentYear = 2026))
@@ -24,6 +21,20 @@ class MaxHeartRateTest {
     fun `a peak sustained for ten seconds is corroborated`() {
         val s = (0..14).map { CalibrationSample(it * 1000L, 175, true) }
         assertEquals(175, MaxHeartRate.corroboratedPeak(s))
+    }
+
+    @Test
+    fun `a run spanning exactly ten seconds is corroborated`() {
+        // 0..10s is a held span of exactly SUSTAIN_MS. The implementation's `held >= SUSTAIN_MS`
+        // must accept this boundary, not just spans strictly longer than it.
+        val s = (0..10).map { CalibrationSample(it * 1000L, 175, true) }
+        assertEquals(175, MaxHeartRate.corroboratedPeak(s))
+    }
+
+    @Test
+    fun `a run spanning nine seconds is not corroborated`() {
+        val s = (0..9).map { CalibrationSample(it * 1000L, 175, true) }
+        assertNull(MaxHeartRate.corroboratedPeak(s))
     }
 
     @Test
@@ -69,6 +80,30 @@ class MaxHeartRateTest {
         val s = listOf(
             CalibrationSample(0L, 195, true),
             CalibrationSample(60_000L, 195, true),
+        )
+        assertNull(MaxHeartRate.corroboratedPeak(s))
+    }
+
+    @Test
+    fun `a gap of exactly five seconds does not break the run`() {
+        // Two back-to-back 5s gaps span exactly the ten-second sustain window. MAX_GAP_MS is
+        // compared with a strict `>`, so a gap of exactly 5000ms must not break continuity.
+        val s = listOf(
+            CalibrationSample(0L, 175, true),
+            CalibrationSample(5_000L, 175, true),
+            CalibrationSample(10_000L, 175, true),
+        )
+        assertEquals(175, MaxHeartRate.corroboratedPeak(s))
+    }
+
+    @Test
+    fun `a gap of five thousand and one milliseconds breaks the run`() {
+        // Same shape as above, but each gap is 1ms over MAX_GAP_MS, so continuity breaks
+        // before either leg reaches the ten-second sustain window.
+        val s = listOf(
+            CalibrationSample(0L, 175, true),
+            CalibrationSample(5_001L, 175, true),
+            CalibrationSample(10_002L, 175, true),
         )
         assertNull(MaxHeartRate.corroboratedPeak(s))
     }

@@ -16,7 +16,14 @@ object MaxHeartRate {
     /** How long a candidate peak must be held to count. */
     const val SUSTAIN_MS = 10_000L
 
-    /** Longest gap between consecutive samples that still counts as continuous. */
+    /**
+     * Longest gap between consecutive samples that still counts as continuous.
+     *
+     * Models BLE strap packet loss: the strap notifies on the heartbeat rather than at a fixed
+     * rate, and a dropped packet can leave a gap in an otherwise-continuous run. A gap longer
+     * than this means the run was not continuously observed and cannot be treated as sustained.
+     * Five seconds is a judgement call, not a value from any spec.
+     */
     private const val MAX_GAP_MS = 5_000L
 
     private const val FLOOR_BPM = 120
@@ -51,7 +58,19 @@ object MaxHeartRate {
                 j++
                 if (next.bpm < floor) floor = next.bpm
                 val held = samples[j].epochMillis - samples[i].epochMillis
-                if (held >= SUSTAIN_MS && (best == null || floor > best!!)) best = floor
+                val currentBest = best
+                if (held >= SUSTAIN_MS && (currentBest == null || floor > currentBest)) {
+                    best = floor
+                }
+
+                // floor is the run's running minimum, so it is monotonically non-increasing as
+                // the run extends (j grows). Once floor has dropped to or below the best
+                // qualifying run found so far, every further extension of this run has a floor
+                // that is <= this floor, so it can never exceed best either. Breaking here only
+                // skips runs that are provably not better than the current best — it cannot
+                // change the result.
+                val bestSoFar = best
+                if (bestSoFar != null && floor <= bestSoFar) break
             }
         }
         return best

@@ -13,17 +13,13 @@ import kotlinx.coroutines.CoroutineScope
  * Telemetry characteristic (write-without-response). Scan/connect/reconnect all live in
  * [BleCentral]; this class owns only the dash-specific write paths.
  *
- * [write] and [writeTime] are both fire-and-forget: `WRITE_TYPE_NO_RESPONSE`, the
- * `writeCharacteristic` return value is ignored, and they deliberately BYPASS
- * [BleCentral.enqueue]. That is safe ONLY because the broadcaster's 1 Hz ticker is the sole
- * caller of this write path (one write per tick, never both `write` and `writeTime` in the
- * same tick). A second concurrent writer would collide on `GATT_BUSY` and be silently
- * dropped — there is nothing anywhere that would surface the failure.
- *
- * The queue in [BleCentral] exists for subscriptions (the HRM's CCCD write), not for these.
- * BleCentral tags each queued operation with the characteristic UUID it targets and advances
- * the queue only on a callback carrying that UUID, so these bypassing writes cannot advance
- * someone else's queue even while a queued operation is genuinely in flight.
+ * [write] and [writeTime] are both fire-and-forget: `WRITE_TYPE_NO_RESPONSE`, and the
+ * `writeCharacteristic` return value is ignored. They issue straight onto the raw
+ * [BluetoothGatt]. That is safe ONLY because the broadcaster's 1 Hz ticker is the sole caller
+ * of this write path (one write per tick, never both `write` and `writeTime` in the same
+ * tick), so there is never a second outstanding operation on this connection. A second
+ * concurrent writer would collide on `GATT_BUSY` and be silently dropped — there is nothing
+ * anywhere that would surface the failure.
  *
  * Both write paths call [BleCentral.hasPermissions] themselves: they use the raw
  * [BluetoothGatt] and so never pass through BleCentral's own permission guards.

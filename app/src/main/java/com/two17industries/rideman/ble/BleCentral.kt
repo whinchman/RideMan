@@ -27,8 +27,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.UUID
-import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.atomic.AtomicReference
 
 /** Callbacks from [BleCentral] into a feature-specific client. */
 interface BleCentralListener {
@@ -45,11 +43,12 @@ interface BleCentralListener {
 }
 
 /**
- * Shared BLE central: scan by service UUID, connect, discover, reconnect with backoff, and
- * serialise GATT operations. Feature-specific behaviour lives in the [BleCentralListener].
+ * Shared BLE central: scan by service UUID, connect, discover, and reconnect with backoff.
+ * Feature-specific behaviour lives in the [BleCentralListener].
  *
- * Android permits exactly one outstanding GATT operation, so every descriptor write goes
- * through [enqueue] rather than being issued directly.
+ * GATT operations are issued directly. Android permits one outstanding operation per
+ * connection, and each consumer of BleCentral owns its own connection — see [subscribe] for
+ * why the operation queue that used to live here was removed.
  *
  * All calls are no-ops (never crashes) when BLE permissions are missing or Bluetooth is off.
  */
@@ -76,32 +75,6 @@ class BleCentral(
     /** Written from the binder thread ([stop] via the service), the main dispatcher, and the retry coroutine itself. */
     @Volatile private var retryJob: Job? = null
 
-    /**
-     * A queued GATT operation and the characteristic UUID whose completion callback ends it.
-     * The tag is what lets [operationComplete] tell OUR callback from a bypassing writer's.
-     */
-    private class QueuedOp(val targetUuid: UUID, val run: (BluetoothGatt) -> Unit)
-
-    private val opQueue = ConcurrentLinkedQueue<QueuedOp>()
-
-    /**
-     * The in-flight slot AND its tag, fused into one atomic so the two can never skew.
-     *
-     * A previous shape kept an AtomicBoolean flag beside a @Volatile UUID and released them
-     * separately; a completing thread could free the flag, let another thread acquire and tag
-     * the next op, and only then null the UUID — clobbering the new tag and stalling the queue
-     * forever. One cell, one CAS, no window.
-     *
-     * INVARIANT: null means idle. [RESERVED] means "acquired by a drain() that has not yet
-     * decided which op it is running" — no real characteristic UUID, so no callback can match
-     * it and steal the release. Any other value is the targetUuid of the op actually issued,
-     * and ONLY a callback carrying that same UUID may release it (back to null).
-     *
-     * Ownership rule: a thread may write this field non-atomically (plain set) only while it
-     * holds the slot, i.e. between a successful acquiring CAS and its release.
-     */
-    private val inFlight = AtomicReference<UUID?>(null)
-
     fun gatt(): BluetoothGatt? = gatt
 
     fun start() {
@@ -127,8 +100,6 @@ class BleCentral(
         stopScan()
         gatt?.close()
         gatt = null
-        opQueue.clear()
-        inFlight.set(null)
         status.set(BleConnectionState.DISABLED)
     }
 
@@ -162,73 +133,28 @@ class BleCentral(
     }
 
     /**
-     * Queue a GATT operation against [targetUuid]. [op] must issue exactly one operation on the
-     * characteristic with that UUID (or its CCCD) which completes via onCharacteristicWrite /
-     * onDescriptorWrite; the queue advances only when a callback carrying [targetUuid] arrives.
-     */
-    fun enqueue(targetUuid: UUID, op: (BluetoothGatt) -> Unit) {
-        opQueue.add(QueuedOp(targetUuid, op))
-        drain()
-    }
-
-    /** Enable notifications on [characteristic], including the mandatory CCCD write. */
-    fun subscribe(characteristic: BluetoothGattCharacteristic) {
-        enqueue(characteristic.uuid) { g ->
-            g.setCharacteristicNotification(characteristic, true)
-            val cccd = characteristic.getDescriptor(CCCD_UUID)
-            if (cccd == null) {
-                // No CCCD: no callback is coming, so complete synchronously. We are inside
-                // drain(), which tagged the slot with this characteristic's UUID before
-                // calling us, so the release CAS matches and the queue keeps moving.
-                operationComplete(characteristic.uuid)
-            } else {
-                // API 33+ overload: value is passed rather than staged on the descriptor.
-                g.writeDescriptor(cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-            }
-        }
-    }
-
-    private fun drain() {
-        val g = gatt ?: return
-        // Acquire the slot as RESERVED. Losing this CAS means someone else owns the slot; they
-        // are responsible for draining what we just enqueued when they release (see below).
-        if (!inFlight.compareAndSet(null, RESERVED)) return
-        val op = opQueue.poll()
-        if (op == null) {
-            // We own the slot, so a plain set is safe: no one else can be writing this field.
-            inFlight.set(null)
-            // LOST-WAKEUP GUARD — do not "simplify" this away. Without the re-check:
-            // thread A wins the CAS and polls null; thread B enqueues and calls drain(), whose
-            // CAS fails because A still holds the slot, so B returns; A then releases. The
-            // queue is now non-empty with nothing in flight and nobody left to drain it. A
-            // subscription flow has no later enqueue() to rescue it, so the strap would
-            // connect and stay silent for the whole ride.
-            if (opQueue.isNotEmpty()) drain()
-            return
-        }
-        // Re-tag RESERVED -> the op's UUID before issuing it. Safe as a plain set for the same
-        // reason, and it must happen BEFORE op.run so a callback can never beat the tag.
-        inFlight.set(op.targetUuid)
-        op.run(g)
-    }
-
-    /**
-     * Advance the queue, but ONLY if [uuid] is the operation we actually issued. Consumers may
-     * also write outside the queue (the dash writes telemetry and time-sync directly, by
-     * design); those writes raise onCharacteristicWrite too, and advancing on one would consume
-     * the in-flight slot of a queued CCCD write and leave the strap connected but silent.
-     * Matching on the tag set in [drain] makes that impossible, rather than merely unlikely.
+     * Enable notifications on [characteristic], including the mandatory CCCD write.
      *
-     * Release is a single CAS from our own tag to null: it both proves we were the in-flight
-     * op and frees the slot in one step, so nothing we do afterwards can touch a slot that has
-     * since been re-acquired by another thread.
+     * Issued directly, with no queue. Android allows one outstanding GATT operation per
+     * connection, and each consumer of BleCentral owns its own connection and issues at most
+     * one operation — a subscribe on connect. A queue was tried here and removed: it was
+     * serialising a queue that never held more than one item, and its concurrency produced
+     * three separate permanent-stall bugs.
+     *
+     * If a consumer ever needs two operations on ONE connection (e.g. reading the strap's
+     * Battery Level 0x180F as well as subscribing), serialisation becomes genuinely necessary
+     * and must be reintroduced deliberately — with a real consumer to test it against.
      */
-    private fun operationComplete(uuid: UUID?) {
-        if (uuid == null) return
-        if (!inFlight.compareAndSet(uuid, null)) return
-        // Same lost-wakeup guard, from the other side: an enqueue that raced our release saw a
-        // busy slot and returned, trusting us to pick its op up here.
-        if (opQueue.isNotEmpty()) drain()
+    fun subscribe(characteristic: BluetoothGattCharacteristic) {
+        if (!hasPermissions()) return
+        val g = gatt ?: return
+        g.setCharacteristicNotification(characteristic, true)
+        // A characteristic with no CCCD cannot be subscribed to over the air. Nothing to do
+        // and nothing to throw about: the local notification flag is set, and a peer that
+        // advertises NOTIFY without a CCCD is simply out of spec and will stay silent.
+        val cccd = characteristic.getDescriptor(CCCD_UUID) ?: return
+        // API 33+ overload: value is passed rather than staged on the descriptor.
+        g.writeDescriptor(cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
     }
 
     private fun startScan() {
@@ -322,8 +248,6 @@ class BleCentral(
                     g.discoverServices()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
-                    opQueue.clear()
-                    inFlight.set(null)
                     g.close()
                     if (gatt === g) gatt = null
                     listener.onDisconnected()
@@ -337,25 +261,29 @@ class BleCentral(
             if (listener.onReady(g)) {
                 attempt = 0
                 status.set(BleConnectionState.CONNECTED)
-                drain()
             } else {
                 g.disconnect()
             }
         }
 
+        /**
+         * The only thing left worth doing here is noticing FAILURE. A CCCD write that fails
+         * leaves the subscription off while the link stays up, so the UI would sit on
+         * CONNECTED and no notification would ever arrive — indistinguishable from a dead
+         * strap, and previously swallowed entirely.
+         *
+         * Disconnecting turns that silent state into one the rest of the class already
+         * handles: onConnectionStateChange publishes DISCONNECTED (which the UI renders) and
+         * calls scheduleReconnect(), so a transient failure is simply retried with backoff
+         * rather than costing the rider the whole ride.
+         */
         override fun onDescriptorWrite(g: BluetoothGatt, d: BluetoothGattDescriptor, status_: Int) {
-            // Tag by the OWNING characteristic: every CCCD shares the same descriptor UUID,
-            // so the descriptor's own UUID would not identify which subscription completed.
-            operationComplete(d.characteristic?.uuid)
+            if (d.uuid == CCCD_UUID && status_ != BluetoothGatt.GATT_SUCCESS) g.disconnect()
         }
 
-        override fun onCharacteristicWrite(
-            g: BluetoothGatt,
-            c: BluetoothGattCharacteristic,
-            status_: Int,
-        ) {
-            operationComplete(c.uuid)
-        }
+        // No onCharacteristicWrite: it existed only to advance the removed queue. The dash's
+        // bypassing telemetry/time-sync writes are WRITE_TYPE_NO_RESPONSE fire-and-forget and
+        // depend on nothing in that callback.
 
         override fun onCharacteristicChanged(
             g: BluetoothGatt,
@@ -378,12 +306,5 @@ class BleCentral(
     companion object {
         /** Client Characteristic Configuration Descriptor — required to start notifications. */
         val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
-
-        /**
-         * Sentinel for [inFlight]: the slot is held by a drain() that has not yet picked its op.
-         * The all-zero UUID is not assignable to a real characteristic, so no callback can
-         * match it — the slot stays exclusively ours across the poll.
-         */
-        private val RESERVED: UUID = UUID(0L, 0L)
     }
 }

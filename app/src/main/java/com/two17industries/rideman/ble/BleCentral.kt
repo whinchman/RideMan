@@ -10,6 +10,7 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.bluetooth.BluetoothStatusCodes
 import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
@@ -82,6 +83,23 @@ class BleCentral(
      */
     @Volatile private var readyResetJob: Job? = null
 
+    /**
+     * Cancellable watchdog for the FIRST notification after a [subscribe], armed by [subscribe]
+     * itself and cancelled by the first [onCharacteristicChanged]. Written from the main
+     * dispatcher (subscribe/callbacks), the binder thread ([stop]), and the coroutine itself,
+     * so it needs the same [Volatile] treatment as [retryJob] and [readyResetJob].
+     *
+     * Deliberately first-notification ONLY, never an ongoing liveness check. Some straps stay
+     * connected and simply go quiet when the rider takes them off mid-ride; an ongoing
+     * watchdog would tear that link down every 10s and produce a reconnect storm at exactly
+     * the moment the rider is fiddling with the strap.
+     *
+     * Armed in [subscribe] rather than in the onReady path so it can never fire for a
+     * write-only consumer: DashBleClient never calls [subscribe] (its onReady only assigns
+     * characteristics and returns true), so no watchdog is ever armed on the dash connection.
+     */
+    @Volatile private var firstNotifyJob: Job? = null
+
     fun gatt(): BluetoothGatt? = gatt
 
     fun start() {
@@ -105,6 +123,8 @@ class BleCentral(
         retryJob = null
         readyResetJob?.cancel()
         readyResetJob = null
+        firstNotifyJob?.cancel()
+        firstNotifyJob = null
         unregisterAdapterReceiver()
         stopScan()
         gatt?.close()
@@ -155,29 +175,66 @@ class BleCentral(
      * and must be reintroduced deliberately — with a real consumer to test it against.
      *
      * Returns true when the CCCD write was actually issued, false when it could not be. This
-     * distinction matters because both failure paths below return before any write happens, so
-     * [onDescriptorWrite]'s disconnect-on-failure recovery never runs for them — without an
+     * distinction matters because every failure path below returns before any write is queued,
+     * so [onDescriptorWrite]'s disconnect-on-failure recovery never runs for them — without an
      * explicit signal here, [onReady] would return true, [BleCentral] would publish CONNECTED,
      * and the strap would sit there silently forever: connected but dead, indistinguishable
      * from broken hardware. Callers must treat false the same as a failed connection.
+     *
+     * [gatt] is passed explicitly rather than read from the field so the operation is provably
+     * issued on the connection that delivered [BleCentralListener.onReady]. Reading the field
+     * meant that a double-connect (see [onScanResult]) could apply `setCharacteristicNotification`
+     * and the CCCD write to connection B using characteristic/descriptor objects owned by
+     * connection A — a handle mismatch that subscribes nothing while reporting success.
      */
-    fun subscribe(characteristic: BluetoothGattCharacteristic): Boolean {
+    fun subscribe(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic): Boolean {
         if (!hasPermissions()) {
             // Silence here is worse than for other guards: the rider can act on NO_PERMISSION,
             // but a bare disconnect (or nothing at all) tells them nothing is wrong.
+            //
+            // This NO_PERMISSION is promptly overwritten by DISCONNECTED, because returning
+            // false makes the caller refuse the connection and onServicesDiscovered disconnects.
+            // The status is not lost: that disconnect calls scheduleReconnect(), and startScan()
+            // re-runs the permission check after the backoff delay and republishes NO_PERMISSION.
+            // So the UI converges on NO_PERMISSION within one backoff interval for as long as
+            // the permission is actually missing.
             status.set(BleConnectionState.NO_PERMISSION)
             return false
         }
-        val g = gatt ?: return false
-        g.setCharacteristicNotification(characteristic, true)
+        gatt.setCharacteristicNotification(characteristic, true)
         // A characteristic with no CCCD cannot be subscribed to over the air. The peer that
         // advertises NOTIFY without a CCCD is simply out of spec and can never notify, so
         // returning false is enough — the caller refuses the connection and BleCentral's
         // existing reconnect path takes over.
         val cccd = characteristic.getDescriptor(CCCD_UUID) ?: return false
-        // API 33+ overload: value is passed rather than staged on the descriptor.
-        g.writeDescriptor(cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-        return true
+        // API 33+ overload: value is passed rather than staged on the descriptor, and the
+        // result is an Int BluetoothStatusCodes — NOT void. It fails synchronously and
+        // routinely (ERROR_GATT_WRITE_NOT_ALLOWED, ERROR_GATT_WRITE_REQUEST_BUSY,
+        // ERROR_DEVICE_NOT_CONNECTED, ERROR_PROFILE_SERVICE_NOT_BOUND). When it does, nothing
+        // is queued, so onDescriptorWrite never fires and its disconnect-on-failure recovery
+        // never runs. Discarding this value is exactly how "connected but silent" happens.
+        val issued = gatt.writeDescriptor(cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) ==
+            BluetoothStatusCodes.SUCCESS
+        if (issued) armFirstNotifyWatchdog(gatt)
+        return issued
+    }
+
+    /**
+     * A successfully issued CCCD write still has two routes to a silent connection: the write
+     * is accepted but [onDescriptorWrite] never arrives, and the write completes with
+     * GATT_SUCCESS but the peer simply never notifies (a stale service cache will do this).
+     * Neither produces any callback to react to, so only a timeout can catch them.
+     *
+     * Disconnecting routes both into recovery the class already has: onConnectionStateChange
+     * publishes DISCONNECTED and calls scheduleReconnect().
+     */
+    private fun armFirstNotifyWatchdog(g: BluetoothGatt) {
+        firstNotifyJob?.cancel()
+        firstNotifyJob = scope.launch {
+            delay(FIRST_NOTIFY_TIMEOUT_MS)
+            firstNotifyJob = null
+            if (hasPermissions()) runCatching { g.disconnect() }
+        }
     }
 
     private fun startScan() {
@@ -251,6 +308,13 @@ class BleCentral(
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
+            // ScanSettings leaves setCallbackType at its CALLBACK_TYPE_ALL_MATCHES default, so
+            // the same device is reported on every advertisement. stopScan() unregisters in the
+            // stack, but results already posted to the main looper still arrive, and stopScan()'s
+            // own `if (!scanning) return` lets the second one fall straight through to
+            // connectGatt. That overwrote the first BluetoothGatt without closing it (a leaked
+            // connection) and left two live links to the same peer.
+            if (gatt != null) return
             val wanted = targetAddress
             if (wanted != null && !wanted.equals(result.device.address, ignoreCase = true)) return
             stopScan()
@@ -268,13 +332,28 @@ class BleCentral(
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     gatt = g
-                    g.discoverServices()
+                    // A non-success status here is a failed connection wearing CONNECTED's
+                    // clothes: the link is not usable, and discovery on it either never
+                    // completes or returns a stale cache. Disconnect so the DISCONNECTED branch
+                    // re-arms the backoff.
+                    if (status_ != BluetoothGatt.GATT_SUCCESS) {
+                        g.disconnect()
+                        return
+                    }
+                    // discoverServices() returns false when the stack is busy or the link is
+                    // tearing down, and then onServicesDiscovered NEVER fires. Discarding it
+                    // stalled the ride permanently: wantRunning true, scanning false, retryJob
+                    // null, gatt non-null, status stuck on SCANNING — and because the link
+                    // stays up, no DISCONNECTED callback ever comes to re-arm anything.
+                    if (!g.discoverServices()) g.disconnect()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     g.close()
                     if (gatt === g) gatt = null
                     readyResetJob?.cancel()
                     readyResetJob = null
+                    firstNotifyJob?.cancel()
+                    firstNotifyJob = null
                     listener.onDisconnected()
                     status.set(BleConnectionState.DISCONNECTED)
                     scheduleReconnect()
@@ -283,6 +362,15 @@ class BleCentral(
         }
 
         override fun onServicesDiscovered(g: BluetoothGatt, status_: Int) {
+            // Checked BEFORE consulting the listener. On a non-success status Android can hand
+            // back a stale service cache, whose characteristic and descriptor handles no longer
+            // match the peer — so onReady would find its characteristic, the CCCD write would
+            // complete with GATT_SUCCESS against the wrong handle, and nothing would ever
+            // notify. Another route to connected-but-silent, so refuse the connection outright.
+            if (status_ != BluetoothGatt.GATT_SUCCESS) {
+                g.disconnect()
+                return
+            }
             if (listener.onReady(g)) {
                 // attempt is deliberately NOT reset here. onReady is where a listener issues
                 // its subscribe(), and the CCCD write it triggers fails afterwards, routed
@@ -326,6 +414,11 @@ class BleCentral(
             c: BluetoothGattCharacteristic,
             value: ByteArray,
         ) {
+            // First notification proves the subscription is live. Cancel and clear, so the
+            // watchdog is never re-armed for the life of this connection — see firstNotifyJob
+            // for why an ongoing liveness check would be actively harmful.
+            firstNotifyJob?.cancel()
+            firstNotifyJob = null
             listener.onCharacteristicChanged(c.uuid, value)
         }
     }
@@ -350,5 +443,13 @@ class BleCentral(
          * healthy connection resets it well before the rider would notice.
          */
         private const val READY_STABLE_MS = 20_000L
+
+        /**
+         * How long after a successfully issued CCCD write the first notification may take
+         * before the connection is treated as silent and torn down. Generous next to a
+         * standard HR strap's 1 Hz measurement rate, so a healthy strap never trips it even
+         * across a slow connection interval negotiation.
+         */
+        private const val FIRST_NOTIFY_TIMEOUT_MS = 10_000L
     }
 }

@@ -45,7 +45,11 @@ class HrmBleClient(context: Context, scope: CoroutineScope) : BleCentralListener
         // subscribe() does the CCCD write as well — setCharacteristicNotification alone
         // leaves the strap connected but silent. Its return value must propagate: a strap
         // that cannot be subscribed to is a failed connection, not a connected one.
-        return central.subscribe(ch)
+        //
+        // Pass the gatt we were handed, not central.gatt(): this guarantees the subscription
+        // is issued on the same connection that produced `ch`, so the characteristic and its
+        // CCCD can never belong to a different connection than the one being written to.
+        return central.subscribe(gatt, ch)
     }
 
     override fun onDisconnected() {

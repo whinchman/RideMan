@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -40,16 +41,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.two17industries.rideman.core.HeartRateZones
 import com.two17industries.rideman.core.PagerWrap
 import com.two17industries.rideman.core.UnitSystem
 import com.two17industries.rideman.core.Units
 import com.two17industries.rideman.data.RideScreen
 import com.two17industries.rideman.data.RidemanSettings
+import com.two17industries.rideman.data.effectiveMaxHeartRate
+import com.two17industries.rideman.hrm.HrmStatus
 import com.two17industries.rideman.ui.RideUiState
 import com.two17industries.rideman.ui.components.TerminalButton
 import com.two17industries.rideman.ui.components.TerminalButtonStyle
 import com.two17industries.rideman.ui.theme.LocalAccent
 import com.two17industries.rideman.ui.theme.Muted
+import java.util.Calendar
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -103,6 +108,8 @@ fun RideScreen(
                     onEndRide = onEndRide,
                     onToggleOrientation = onToggleOrientation,
                     accent = accent,
+                    heartRateBpm = state.heartRateBpm,
+                    hrmEnabled = settings.hrmEnabled,
                 )
             }
         } else {
@@ -117,6 +124,8 @@ fun RideScreen(
                     currentIndex = currentIndex,
                     onEndRide = onEndRide,
                     accent = accent,
+                    heartRateBpm = state.heartRateBpm,
+                    hrmEnabled = settings.hrmEnabled,
                 )
             }
         }
@@ -141,6 +150,19 @@ private fun RidePager(
             RideScreen.COMPASS -> CompassScreen(state.headingDeg)
             RideScreen.ALTITUDE -> AltimeterScreen(state.altitudeM, settings.units)
             RideScreen.CADENCE -> CadenceScreen(settings.cadenceMode, settings.targetRpm)
+            RideScreen.HEART_RATE -> {
+                val hrmState by HrmStatus.state.collectAsState()
+                val year = remember { Calendar.getInstance().get(Calendar.YEAR) }
+                val maxHr = settings.effectiveMaxHeartRate(year)
+                HeartRateScreen(
+                    bpm = state.heartRateBpm,
+                    zone = state.heartRateBpm?.let { b ->
+                        maxHr?.let { HeartRateZones.zoneFor(b, it, settings.baselineHeartRateBpm) }
+                    },
+                    // Only explain the absence when there is no reading to show.
+                    statusLabel = if (state.heartRateBpm == null) hrmStatusLabel(hrmState) else null,
+                )
+            }
         }
     }
 }
@@ -235,6 +257,8 @@ private fun SideRail(
     onEndRide: () -> Unit,
     onToggleOrientation: () -> Unit,
     accent: Color,
+    heartRateBpm: Int?,
+    hrmEnabled: Boolean,
 ) {
     Column(
         Modifier
@@ -250,6 +274,15 @@ private fun SideRail(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(vertical = 9.dp),
         )
+        // Only when the feature is on, so riders without a strap see no change at all.
+        if (hrmEnabled) {
+            Text(
+                text = heartRateBpm?.let { "♥ $it" } ?: "♥ --",
+                color = accent,
+                style = MaterialTheme.typography.titleLarge.copy(fontSize = 14.sp),
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             PaginatorDots(count = count, currentIndex = currentIndex, accent = accent, vertical = true)
         }
@@ -267,12 +300,28 @@ private fun SideRail(
 }
 
 @Composable
-private fun BottomBar(count: Int, currentIndex: Int, onEndRide: () -> Unit, accent: Color) {
+private fun BottomBar(
+    count: Int,
+    currentIndex: Int,
+    onEndRide: () -> Unit,
+    accent: Color,
+    heartRateBpm: Int?,
+    hrmEnabled: Boolean,
+) {
     Column(
         Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        // Only when the feature is on, so riders without a strap see no change at all.
+        if (hrmEnabled) {
+            Text(
+                text = heartRateBpm?.let { "♥ $it" } ?: "♥ --",
+                color = accent,
+                style = MaterialTheme.typography.titleLarge.copy(fontSize = 16.sp),
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
         PaginatorDots(count = count, currentIndex = currentIndex, accent = accent, vertical = false)
         TerminalButton(
             text = "END RIDE",
@@ -290,9 +339,10 @@ private fun speak(tts: TextToSpeech, state: RideUiState, units: UnitSystem) {
     val dist = String.format(Locale.US, "%.2f", Units.distance(state.distanceM, units))
     val heading = state.headingDeg.roundToInt() % 360
     val alt = Units.altitude(state.altitudeM, units).roundToInt()
+    val hr = state.heartRateBpm?.let { " Heart rate $it B P M." } ?: ""
     val text = "Speed $speed ${Units.speedLabel(units)}. " +
         "Distance $dist ${Units.distanceLabel(units)}. " +
         "Heading $heading degrees. " +
-        "Altitude $alt ${Units.altitudeLabel(units)}."
+        "Altitude $alt ${Units.altitudeLabel(units)}." + hr
     tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "ride-readout")
 }

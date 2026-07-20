@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.map
  *
  * Stored as a CSV of names; presence in the CSV also means "enabled".
  */
-enum class RideScreen { GRID, SPEED, ODOMETER, COMPASS, ALTITUDE, CADENCE }
+enum class RideScreen { GRID, SPEED, ODOMETER, COMPASS, ALTITUDE, CADENCE, HEART_RATE }
 
 enum class ThemeChoice { AMBER, ACID_GREEN, ELECTRIC_CYAN, HOT_MAGENTA }
 
@@ -76,6 +76,7 @@ class SettingsStore(private val context: Context) {
         val STRAVA_UPLOAD = booleanPreferencesKey("strava_upload_enabled")
         val DASH_ENABLED = booleanPreferencesKey("dash_enabled")
         val GRID_MIGRATED = booleanPreferencesKey("grid_migrated")
+        val HR_MIGRATED = booleanPreferencesKey("hr_migrated")
         val RIDE_ORIENTATION = stringPreferencesKey("ride_orientation")
         val HRM_ENABLED = booleanPreferencesKey("hrm_enabled")
         val HRM_ADDRESS = stringPreferencesKey("hrm_address")
@@ -92,7 +93,8 @@ class SettingsStore(private val context: Context) {
             screenOrder = ScreenOrder.migrate(
                 saved = p[Keys.ORDER]?.split(",")
                     ?.mapNotNull { runCatching { RideScreen.valueOf(it) }.getOrNull() },
-                alreadyMigrated = p[Keys.GRID_MIGRATED] ?: false,
+                gridMigrated = p[Keys.GRID_MIGRATED] ?: false,
+                hrMigrated = p[Keys.HR_MIGRATED] ?: false,
             ),
             cadenceMode = p[Keys.CADENCE_MODE]?.let { runCatching { CadenceMode.valueOf(it) }.getOrNull() }
                 ?: CadenceMode.FULL,
@@ -123,6 +125,7 @@ class SettingsStore(private val context: Context) {
             p[Keys.STRAVA_UPLOAD] = s.stravaUploadEnabled
             p[Keys.DASH_ENABLED] = s.dashEnabled
             p[Keys.GRID_MIGRATED] = true
+            p[Keys.HR_MIGRATED] = true
             p[Keys.RIDE_ORIENTATION] = s.rideOrientation.name
             p[Keys.HRM_ENABLED] = s.hrmEnabled
             applyNullableFields(p, s)

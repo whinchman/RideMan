@@ -51,6 +51,11 @@ object TcxWriter {
             track.append("            </Position>\n")
             p.altitudeM?.let { track.append("            <AltitudeMeters>$it</AltitudeMeters>\n") }
             track.append("            <DistanceMeters>$cumulative</DistanceMeters>\n")
+            // TCX v2 Trackpoint child order: Time, Position, AltitudeMeters, DistanceMeters,
+            // HeartRateBpm, Cadence, SensorState, Extensions.
+            p.heartRateBpm?.let {
+                track.append("            <HeartRateBpm><Value>$it</Value></HeartRateBpm>\n")
+            }
             track.append("            <Extensions>\n")
             track.append("              <ns3:TPX>\n")
             track.append("                <ns3:Speed>${p.speedMps}</ns3:Speed>\n")
@@ -60,9 +65,16 @@ object TcxWriter {
         }
 
         // Lap child order follows the TCX v2 XSD sequence: TotalTimeSeconds (above),
-        // DistanceMeters, MaximumSpeed, Intensity, TriggerMethod, then Track.
+        // DistanceMeters, MaximumSpeed, AverageHeartRateBpm, MaximumHeartRateBpm, Intensity,
+        // TriggerMethod, then Track.
         sb.append("        <DistanceMeters>$cumulative</DistanceMeters>\n")
         sb.append("        <MaximumSpeed>${ride.maxSpeedMps}</MaximumSpeed>\n")
+        ride.avgHeartRateBpm?.let {
+            sb.append("        <AverageHeartRateBpm><Value>$it</Value></AverageHeartRateBpm>\n")
+        }
+        ride.maxHeartRateBpm?.let {
+            sb.append("        <MaximumHeartRateBpm><Value>$it</Value></MaximumHeartRateBpm>\n")
+        }
         sb.append("        <Intensity>Active</Intensity>\n")
         sb.append("        <TriggerMethod>Manual</TriggerMethod>\n")
         sb.append("        <Track>\n")

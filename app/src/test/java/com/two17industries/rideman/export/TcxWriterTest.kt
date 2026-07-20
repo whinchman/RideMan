@@ -67,4 +67,91 @@ class TcxWriterTest {
         assertTrue(xml.contains("<Activity Sport=\"Biking\">"))
         assertTrue(xml.contains("</TrainingCenterDatabase>"))
     }
+
+    @Test
+    fun `heart rate is emitted between DistanceMeters and Extensions`() {
+        val ride = RideEntity(
+            id = 1, startedAt = 0L, endedAt = 1_000L, totalTimeMs = 1_000L,
+            distanceM = 10.0, maxSpeedMps = 5f, avgSpeedMps = 5f,
+        )
+        val points = listOf(
+            TrackPointEntity(
+                rideId = 1, timestamp = 0L, lat = 1.0, lng = 2.0,
+                altitudeM = null, speedMps = 5f, headingDeg = 0f,
+                accuracyM = null, heartRateBpm = 142,
+            ),
+        )
+        val xml = TcxWriter.write(ride, points)
+        assertTrue(xml.contains("<HeartRateBpm><Value>142</Value></HeartRateBpm>"))
+        // XSD child order: DistanceMeters, then HeartRateBpm, then Extensions.
+        val d = xml.indexOf("<DistanceMeters>", xml.indexOf("<Trackpoint>"))
+        val h = xml.indexOf("<HeartRateBpm>")
+        val e = xml.indexOf("<Extensions>")
+        assertTrue("expected DistanceMeters < HeartRateBpm < Extensions", d < h && h < e)
+    }
+
+    @Test
+    fun `a point without heart rate emits no HeartRateBpm tag`() {
+        val ride = RideEntity(
+            id = 1, startedAt = 0L, endedAt = 1_000L, totalTimeMs = 1_000L,
+            distanceM = 10.0, maxSpeedMps = 5f, avgSpeedMps = 5f,
+        )
+        val points = listOf(
+            TrackPointEntity(
+                rideId = 1, timestamp = 0L, lat = 1.0, lng = 2.0,
+                altitudeM = null, speedMps = 5f, headingDeg = 0f,
+                accuracyM = null, heartRateBpm = null,
+            ),
+        )
+        assertTrue(!TcxWriter.write(ride, points).contains("<HeartRateBpm>"))
+    }
+
+    @Test
+    fun `a dropout mid ride produces exactly one HeartRateBpm tag`() {
+        val ride = RideEntity(
+            id = 1, startedAt = 0L, endedAt = 2_000L, totalTimeMs = 2_000L,
+            distanceM = 20.0, maxSpeedMps = 5f, avgSpeedMps = 5f,
+        )
+        val points = listOf(
+            TrackPointEntity(
+                rideId = 1, timestamp = 0L, lat = 1.0, lng = 2.0,
+                altitudeM = null, speedMps = 5f, headingDeg = 0f,
+                accuracyM = null, heartRateBpm = 130,
+            ),
+            TrackPointEntity(
+                rideId = 1, timestamp = 1_000L, lat = 1.1, lng = 2.1,
+                altitudeM = null, speedMps = 5f, headingDeg = 0f,
+                accuracyM = null, heartRateBpm = null,
+            ),
+        )
+        val xml = TcxWriter.write(ride, points)
+        assertEquals(1, Regex("<HeartRateBpm>").findAll(xml).count())
+    }
+
+    @Test
+    fun `lap level heart rate is emitted between MaximumSpeed and Intensity`() {
+        val ride = RideEntity(
+            id = 1, startedAt = 0L, endedAt = 1_000L, totalTimeMs = 1_000L,
+            distanceM = 10.0, maxSpeedMps = 5f, avgSpeedMps = 5f,
+            avgHeartRateBpm = 138, maxHeartRateBpm = 171,
+        )
+        val xml = TcxWriter.write(ride, emptyList())
+        assertTrue(xml.contains("<AverageHeartRateBpm><Value>138</Value></AverageHeartRateBpm>"))
+        assertTrue(xml.contains("<MaximumHeartRateBpm><Value>171</Value></MaximumHeartRateBpm>"))
+        val m = xml.indexOf("<MaximumSpeed>")
+        val a = xml.indexOf("<AverageHeartRateBpm>")
+        val i = xml.indexOf("<Intensity>")
+        assertTrue("expected MaximumSpeed < AverageHeartRateBpm < Intensity", m < a && a < i)
+    }
+
+    @Test
+    fun `a ride with no heart rate emits no lap level tags`() {
+        val ride = RideEntity(
+            id = 1, startedAt = 0L, endedAt = 1_000L, totalTimeMs = 1_000L,
+            distanceM = 10.0, maxSpeedMps = 5f, avgSpeedMps = 5f,
+        )
+        val xml = TcxWriter.write(ride, emptyList())
+        assertTrue(!xml.contains("AverageHeartRateBpm"))
+        assertTrue(!xml.contains("MaximumHeartRateBpm"))
+    }
 }

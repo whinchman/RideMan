@@ -21,6 +21,8 @@ sealed interface CalibrationResult {
         POOR_CONTACT,
         /** The rider was still moving; no 60-second window was steady enough. */
         TOO_VARIABLE,
+        /** Too few readings survived to score a window — a strap problem, not a stillness problem. */
+        INSUFFICIENT_DATA,
     }
 }
 
@@ -63,12 +65,16 @@ object BaselineCalibration {
             return CalibrationResult.Failed(CalibrationResult.Failure.POOR_CONTACT)
         }
 
+        // Duration and overall contact ratio are already confirmed above, so an empty usable set
+        // here means the settle filter and per-sample contact filter starved the window scorer —
+        // a strap problem, not a session-length problem.
         val usable = samples.filter { it.epochMillis - start >= SETTLE_MS && it.contactOk }
         if (usable.isEmpty()) {
-            return CalibrationResult.Failed(CalibrationResult.Failure.TOO_SHORT)
+            return CalibrationResult.Failed(CalibrationResult.Failure.INSUFFICIENT_DATA)
         }
 
         var bestMean: Double? = null
+        var anyWindowScored = false
         for (i in usable.indices) {
             val windowStart = usable[i].epochMillis
             val window = usable.asSequence()
@@ -78,6 +84,7 @@ object BaselineCalibration {
             // Only score full windows, so the tail of the session cannot win on a short slice.
             if (window.size < 2) continue
             if (window.last().epochMillis - windowStart < WINDOW_MS - 2_000L) continue
+            anyWindowScored = true
 
             val values = window.map { it.bpm.toDouble() }
             val mean = values.average()
@@ -87,8 +94,15 @@ object BaselineCalibration {
             if (bestMean == null || mean < bestMean) bestMean = mean
         }
 
-        val result = bestMean
-            ?: return CalibrationResult.Failed(CalibrationResult.Failure.TOO_VARIABLE)
+        val result = bestMean ?: return CalibrationResult.Failed(
+            // Windows were scored but all too noisy vs. no window ever reaching full length —
+            // the latter is a strap/data problem, not evidence the rider was moving.
+            if (anyWindowScored) {
+                CalibrationResult.Failure.TOO_VARIABLE
+            } else {
+                CalibrationResult.Failure.INSUFFICIENT_DATA
+            },
+        )
         return CalibrationResult.Ok(result.roundToInt())
     }
 }

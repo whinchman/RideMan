@@ -85,4 +85,55 @@ class BaselineCalibrationTest {
         }
         assertTrue(BaselineCalibration.reduce(samples) is CalibrationResult.Ok)
     }
+
+    @Test
+    fun `good contact confined to the settle period is insufficient data not too short`() {
+        // A full five-minute session: 60s of good contact while settling, then only two
+        // poor-contact samples afterward. Overall poor-contact ratio stays well under 10%, and
+        // the session ran the full duration, so this must not be blamed on session length.
+        val settling = (0 until 60).map { CalibrationSample(it * 1000L, 62, true) }
+        val afterSettle = listOf(
+            CalibrationSample(61_000L, 62, false),
+            CalibrationSample(300_000L, 62, false),
+        )
+        val samples = settling + afterSettle
+        assertEquals(
+            CalibrationResult.Failed(CalibrationResult.Failure.INSUFFICIENT_DATA),
+            BaselineCalibration.reduce(samples),
+        )
+    }
+
+    @Test
+    fun `post-settle samples too sparse for any full window is insufficient data not too variable`() {
+        // A full five-minute session with a solid settle period, then only four good-contact
+        // readings spread across the remainder — never close enough together to fill a
+        // sixty-second window. No window can be scored at all, so this is a strap/data problem,
+        // not evidence the rider never sat still.
+        val settling = (0 until 60).map { CalibrationSample(it * 1000L, 62, true) }
+        val sparse = listOf(
+            CalibrationSample(61_000L, 62, true),
+            CalibrationSample(161_000L, 62, true),
+            CalibrationSample(261_000L, 62, true),
+            CalibrationSample(300_000L, 62, true),
+        )
+        val samples = settling + sparse
+        assertEquals(
+            CalibrationResult.Failed(CalibrationResult.Failure.INSUFFICIENT_DATA),
+            BaselineCalibration.reduce(samples),
+        )
+    }
+
+    @Test
+    fun `a genuinely unsteady full-density session is still too variable not insufficient data`() {
+        // Full one-sample-per-second density for the whole session, oscillating well outside the
+        // 5 bpm std-dev threshold in every window. Windows ARE scored here — this guards that the
+        // new insufficient-data branch cannot swallow a real too-variable result.
+        val samples = (0 until 300).map {
+            CalibrationSample(it * 1000L, if (it % 3 == 0) 50 else 80, true)
+        }
+        assertEquals(
+            CalibrationResult.Failed(CalibrationResult.Failure.TOO_VARIABLE),
+            BaselineCalibration.reduce(samples),
+        )
+    }
 }

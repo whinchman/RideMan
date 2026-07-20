@@ -32,11 +32,19 @@ object HeartRateStamp {
     /** A reading older than this is not attached to a fix. */
     const val MAX_AGE_MS = 5_000L
 
+    /**
+     * A reading may be marginally NEWER than the fix it is attached to: LocationSample.epochMillis
+     * is the provider's fix-generation time, while a HeartRateSample is stamped at BLE delivery.
+     * That skew is systematic and small. A reading further ahead than this is genuine clock skew
+     * and is rejected.
+     */
+    const val MAX_FUTURE_SKEW_MS = 1_000L
+
     fun bpmFor(fixMillis: Long, hr: HeartRateSample?): Int? {
         if (hr == null) return null
         if (!hr.contactOk) return null
         val age = fixMillis - hr.epochMillis
-        if (age < 0 || age > MAX_AGE_MS) return null
+        if (age < -MAX_FUTURE_SKEW_MS || age > MAX_AGE_MS) return null
         return hr.bpm
     }
 }

@@ -2,6 +2,7 @@ package com.two17industries.rideman.core
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HeartRateZonesTest {
@@ -23,7 +24,7 @@ class HeartRateZonesTest {
     fun `karvonen bounds sit above percent of max bounds`() {
         val karvonen = HeartRateZones.lowerBounds(190, 55)
         val pctOfMax = HeartRateZones.lowerBounds(190, null)
-        karvonen.zip(pctOfMax).forEach { (k, p) -> assert(k > p) { "$k should exceed $p" } }
+        karvonen.zip(pctOfMax).forEach { (k, p) -> assertTrue("$k should exceed $p", k > p) }
     }
 
     @Test
@@ -41,6 +42,8 @@ class HeartRateZonesTest {
     fun `zoneFor is inclusive at each lower bound`() {
         assertEquals(1, HeartRateZones.zoneFor(100, 200, null))
         assertEquals(2, HeartRateZones.zoneFor(120, 200, null))
+        assertEquals(3, HeartRateZones.zoneFor(140, 200, null))
+        assertEquals(4, HeartRateZones.zoneFor(160, 200, null))
         assertEquals(5, HeartRateZones.zoneFor(180, 200, null))
     }
 
@@ -68,5 +71,14 @@ class HeartRateZonesTest {
         val samples = listOf(0L to 105, 5_000L to 105, 2_000L to 105)
         val result = HeartRateZones.timeInZoneMs(samples, 200, null)
         assertEquals(5_000L, result[1])
+    }
+
+    @Test
+    fun `timeInZoneMs ignores a zero-delta duplicate sample`() {
+        // t=0 bpm 105 (zone 1), t=2000 bpm 125 (zone 2, duplicate timestamp), t=2000 bpm 130 (zone 2)
+        val samples = listOf(0L to 105, 2_000L to 125, 2_000L to 130, 5_000L to 140)
+        val result = HeartRateZones.timeInZoneMs(samples, 200, null)
+        // interval 0->2000 (1000ms in zone 1), duplicate at 2000 contributes nothing, 2000->5000 (3000ms in zone 2)
+        assertArrayEquals(longArrayOf(0, 2_000, 3_000, 0, 0, 0), result)
     }
 }

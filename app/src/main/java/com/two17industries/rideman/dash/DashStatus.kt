@@ -1,13 +1,11 @@
 package com.two17industries.rideman.dash
 
-import kotlinx.coroutines.flow.MutableStateFlow
+import com.two17industries.rideman.ble.BleConnectionState
+import com.two17industries.rideman.ble.BleStatus
 import kotlinx.coroutines.flow.StateFlow
 
-enum class DashConnectionState { DISABLED, SCANNING, CONNECTED, DISCONNECTED }
-
-/** Single-process channel from the BLE client to the UI (mirrors LocationBus). */
+/** Single-process channel from the dash BLE client to the UI (mirrors LocationBus). */
 object DashStatus {
-    private val _state = MutableStateFlow(DashConnectionState.DISABLED)
-    val state: StateFlow<DashConnectionState> = _state
-    fun set(s: DashConnectionState) { _state.value = s }
+    val status = BleStatus()
+    val state: StateFlow<BleConnectionState> = status.state
 }

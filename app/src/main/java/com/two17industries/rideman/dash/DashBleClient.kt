@@ -1,148 +1,85 @@
 package com.two17industries.rideman.dash
 
-import android.Manifest
 import android.annotation.SuppressLint
-import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCharacteristic
-import android.bluetooth.BluetoothGattCallback
-import android.bluetooth.BluetoothManager
-import android.bluetooth.BluetoothProfile
-import android.bluetooth.le.BluetoothLeScanner
-import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanFilter
-import android.bluetooth.le.ScanResult
-import android.bluetooth.le.ScanSettings
 import android.content.Context
-import android.content.pm.PackageManager
-import android.os.ParcelUuid
-import androidx.core.content.ContextCompat
+import com.two17industries.rideman.ble.BleCentral
+import com.two17industries.rideman.ble.BleCentralListener
+import kotlinx.coroutines.CoroutineScope
 
 /**
- * BLE central: scans for the T-Display by service UUID, connects, and writes telemetry to the
- * Telemetry characteristic (write-without-response). Auto-reconnects on drop. All calls are
- * no-ops (not crashes) when BLE permissions are missing or Bluetooth is off.
+ * BLE central for the T-Display: connects by service UUID and writes telemetry to the
+ * Telemetry characteristic (write-without-response). Scan/connect/reconnect all live in
+ * [BleCentral]; this class owns only the dash-specific write paths.
  *
  * [write] and [writeTime] are both fire-and-forget: `WRITE_TYPE_NO_RESPONSE`, the
- * `writeCharacteristic` return value is ignored, and there is no write queue or
- * `onCharacteristicWrite` callback. That is safe ONLY because the broadcaster's 1 Hz ticker
- * is the sole caller of this write path (one write per tick, never both `write` and
- * `writeTime` in the same tick). A second concurrent writer would collide on `GATT_BUSY`
- * and be silently dropped — there is nothing anywhere that would surface the failure.
+ * `writeCharacteristic` return value is ignored, and they deliberately BYPASS
+ * [BleCentral.enqueue]. That is safe ONLY because the broadcaster's 1 Hz ticker is the sole
+ * caller of this write path (one write per tick, never both `write` and `writeTime` in the
+ * same tick). A second concurrent writer would collide on `GATT_BUSY` and be silently
+ * dropped — there is nothing anywhere that would surface the failure.
+ *
+ * The queue in [BleCentral] exists for subscriptions (the HRM's CCCD write), not for these.
+ * [BleCentral.operationComplete] ignores write callbacks that did not come from a queued
+ * operation, so these bypassing writes cannot advance someone else's queue.
  */
-@SuppressLint("MissingPermission") // guarded by hasBlePermissions()
-class DashBleClient(private val context: Context) {
+@SuppressLint("MissingPermission") // guarded inside BleCentral
+class DashBleClient(context: Context, scope: CoroutineScope) : BleCentralListener {
 
-    private val manager by lazy { context.getSystemService(BluetoothManager::class.java) }
-    private val scanner: BluetoothLeScanner? get() = manager?.adapter?.bluetoothLeScanner
-
-    @Volatile private var gatt: BluetoothGatt? = null
     @Volatile private var characteristic: BluetoothGattCharacteristic? = null
     @Volatile private var timeChar: BluetoothGattCharacteristic? = null
-    @Volatile private var scanning = false
-    @Volatile private var wantRunning = false
 
-    fun start() {
-        if (!hasBlePermissions() || manager?.adapter?.isEnabled != true) {
-            DashStatus.set(DashConnectionState.DISABLED)
-            return
-        }
-        wantRunning = true
-        startScan()
-    }
+    private val central = BleCentral(
+        context = context,
+        serviceUuid = DashBleContract.SERVICE_UUID,
+        status = DashStatus.status,
+        scope = scope,
+        listener = this,
+    )
+
+    fun start() = central.start()
 
     fun stop() {
-        wantRunning = false
-        stopScan()
-        gatt?.close()
-        gatt = null
         characteristic = null
         timeChar = null
-        DashStatus.set(DashConnectionState.DISABLED)
+        central.stop()
     }
 
     fun write(bytes: ByteArray) {
-        val g = gatt ?: return
+        val g = central.gatt() ?: return
         val c = characteristic ?: return
-        if (!hasBlePermissions()) return
         g.writeCharacteristic(c, bytes, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
     }
 
     /**
      * Writes the time-sync packet. No-ops if the peer has no time-sync characteristic —
-     * i.e. a board on older firmware. That is not an error: the dash keeps working, it
-     * just has no clock. MUST only be called from the broadcaster's 1 Hz ticker, which
-     * is the single caller of the GATT write path: this is fire-and-forget with no queue
-     * and an ignored return value, so a second concurrent writer would collide on
-     * GATT_BUSY and be silently dropped (see class KDoc).
+     * i.e. a board on older firmware. That is not an error: the dash keeps working, it just
+     * has no clock. MUST only be called from the broadcaster's 1 Hz ticker (see class KDoc).
      */
     fun writeTime(bytes: ByteArray) {
-        val g = gatt ?: return
+        val g = central.gatt() ?: return
         val c = timeChar ?: return
-        if (!hasBlePermissions()) return
         g.writeCharacteristic(c, bytes, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
     }
 
-    private fun startScan() {
-        val s = scanner ?: return
-        if (scanning) return
-        scanning = true
-        DashStatus.set(DashConnectionState.SCANNING)
-        val filter = ScanFilter.Builder()
-            .setServiceUuid(ParcelUuid(DashBleContract.SERVICE_UUID))
-            .build()
-        val settings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-            .build()
-        s.startScan(listOf(filter), settings, scanCallback)
+    override fun onReady(gatt: BluetoothGatt): Boolean {
+        val svc = gatt.getService(DashBleContract.SERVICE_UUID)
+        val ch = svc?.getCharacteristic(DashBleContract.TELEMETRY_UUID) ?: return false
+        // Absent on older firmware — not an error, we just never get a clock.
+        //
+        // ORDERING IS LOAD-BEARING: timeChar must be assigned before this returns true,
+        // because BleCentral publishes CONNECTED only after onReady returns. The scheduler
+        // syncs on the CONNECTED edge, so assigning timeChar afterwards would burn the first
+        // sync and leave the board at "--:--" for 60s. (Recorded as D4 in the dash-time-sync
+        // review, where it was load-bearing but uncommented. It is commented now.)
+        timeChar = svc.getCharacteristic(DashBleContract.TIME_SYNC_UUID)
+        characteristic = ch
+        return true
     }
 
-    private fun stopScan() {
-        if (!scanning) return
-        scanning = false
-        if (hasBlePermissions()) scanner?.stopScan(scanCallback)
+    override fun onDisconnected() {
+        characteristic = null
+        timeChar = null
     }
-
-    private val scanCallback = object : ScanCallback() {
-        override fun onScanResult(callbackType: Int, result: ScanResult) {
-            stopScan()
-            gatt = result.device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
-        }
-    }
-
-    private val gattCallback = object : BluetoothGattCallback() {
-        override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
-            when (newState) {
-                BluetoothProfile.STATE_CONNECTED -> {
-                    gatt = g
-                    g.discoverServices()
-                }
-                BluetoothProfile.STATE_DISCONNECTED -> {
-                    characteristic = null
-                    timeChar = null
-                    g.close()
-                    if (gatt === g) gatt = null
-                    DashStatus.set(DashConnectionState.DISCONNECTED)
-                    if (wantRunning) startScan() // auto-reconnect
-                }
-            }
-        }
-
-        override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
-            val svc = g.getService(DashBleContract.SERVICE_UUID)
-            val ch = svc?.getCharacteristic(DashBleContract.TELEMETRY_UUID)
-            // Absent on older firmware — not an error, we just never get a clock.
-            timeChar = svc?.getCharacteristic(DashBleContract.TIME_SYNC_UUID)
-            if (ch != null) {
-                characteristic = ch
-                DashStatus.set(DashConnectionState.CONNECTED)
-            } else {
-                g.disconnect()
-            }
-        }
-    }
-
-    private fun hasBlePermissions(): Boolean =
-        ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
 }

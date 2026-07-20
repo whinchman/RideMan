@@ -1,6 +1,7 @@
 package com.two17industries.rideman.dash
 
 import android.content.Context
+import com.two17industries.rideman.ble.BleConnectionState
 import com.two17industries.rideman.core.LocationSample
 import com.two17industries.rideman.core.RideTracker
 import com.two17industries.rideman.core.UnitSystem
@@ -24,7 +25,7 @@ class DashBroadcaster(
     private val scope: CoroutineScope,
 ) {
     private val appContext = context.applicationContext
-    private val client = DashBleClient(appContext)
+    private val client = DashBleClient(appContext, scope)
     private val settingsStore = SettingsStore(appContext)
 
     private val startMillis = System.currentTimeMillis()
@@ -55,7 +56,7 @@ class DashBroadcaster(
             DashStatus.state.collect { state ->
                 // Every reconnect re-arms an immediate sync: the board deep-sleeps after
                 // 2 min disconnected and cold-boots with millis() reset, losing its clock.
-                if (state == DashConnectionState.CONNECTED) timeSync.onConnected()
+                if (state == BleConnectionState.CONNECTED) timeSync.onConnected()
             }
         }
         jobs += scope.launch {

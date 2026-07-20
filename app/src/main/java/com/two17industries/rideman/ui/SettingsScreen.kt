@@ -36,10 +36,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.two17industries.rideman.ble.BleConnectionState
 import com.two17industries.rideman.core.Cadence
 import com.two17industries.rideman.core.CadenceMode
 import com.two17industries.rideman.core.UnitSystem
-import com.two17industries.rideman.dash.DashConnectionState
 import com.two17industries.rideman.dash.DashStatus
 import com.two17industries.rideman.data.RideScreen
 import com.two17industries.rideman.data.RidemanSettings
@@ -179,10 +179,13 @@ fun SettingsScreen(
             }
             if (dashEnabled) {
                 val label = when (dashState) {
-                    DashConnectionState.CONNECTED -> "Connected"
-                    DashConnectionState.SCANNING -> "Searching…"
-                    DashConnectionState.DISCONNECTED -> "Disconnected"
-                    DashConnectionState.DISABLED -> "Idle (starts with your ride)"
+                    BleConnectionState.DISABLED -> "Off"
+                    BleConnectionState.NO_PERMISSION -> "Bluetooth permission needed"
+                    BleConnectionState.BLUETOOTH_OFF -> "Bluetooth is off"
+                    BleConnectionState.SCANNING -> "Searching…"
+                    BleConnectionState.CONNECTED -> "Connected"
+                    BleConnectionState.DISCONNECTED -> "Reconnecting…"
+                    BleConnectionState.GAVE_UP -> "Not found — toggle off and on to retry"
                 }
                 Text(label, color = Muted, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 12.sp))
             }

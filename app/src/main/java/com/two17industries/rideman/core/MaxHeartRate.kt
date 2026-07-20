@@ -24,9 +24,14 @@ object MaxHeartRate {
      * than this means the run was not continuously observed and cannot be treated as sustained.
      * Five seconds is a judgement call, not a value from any spec.
      *
-     * Shared with [HeartRateZones.timeInZoneMs], which asks the same question of the same data
-     * — "were these two samples continuously observed?" — and must give the same answer. This
-     * is the single definition; do not introduce a second gap constant.
+     * Shared with [HeartRateZones.timeInZoneMs], which asks the same *question* — "were these
+     * two samples continuously observed?" — but of a different stream: this one paces off strap
+     * notifications, which arrive on the heartbeat, while [HeartRateZones.timeInZoneMs] paces off
+     * track points, which arrive at the GPS fix rate. The single shared value is only correct
+     * because both streams happen to sit near 1 Hz today. If either stream's cadence changes,
+     * split this into two constants rather than retuning the value in place — a strap that
+     * starts notifying at 1-2 s, for example, must not silently re-attribute time-in-zone across
+     * every historical ride just because the sustain-window gate got tighter.
      */
     const val MAX_GAP_MS = 5_000L
 

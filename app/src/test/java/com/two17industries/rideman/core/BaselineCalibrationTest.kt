@@ -13,7 +13,7 @@ class BaselineCalibrationTest {
 
     @Test
     fun `a steady five minute session yields that heart rate`() {
-        val r = BaselineCalibration.reduce(steady(300, 62))
+        val r = BaselineCalibration.reduce(steady(300, 62), stoppedEarly = false)
         assertEquals(CalibrationResult.Ok(62), r)
     }
 
@@ -22,7 +22,10 @@ class BaselineCalibrationTest {
         // High while settling, then steady low. The settling period must not raise the result.
         val settling = (0 until 60).map { CalibrationSample(it * 1000L, 95, true) }
         val settled = (60 until 300).map { CalibrationSample(it * 1000L, 58, true) }
-        assertEquals(CalibrationResult.Ok(58), BaselineCalibration.reduce(settling + settled))
+        assertEquals(
+            CalibrationResult.Ok(58),
+            BaselineCalibration.reduce(settling + settled, stoppedEarly = false),
+        )
     }
 
     @Test
@@ -30,7 +33,7 @@ class BaselineCalibrationTest {
         // Steady 70, with a single 40 bpm artifact. One low sample must not define the result.
         val samples = steady(300, 70).toMutableList()
         samples[200] = CalibrationSample(200_000L, 40, true)
-        val r = BaselineCalibration.reduce(samples) as CalibrationResult.Ok
+        val r = BaselineCalibration.reduce(samples, stoppedEarly = false) as CalibrationResult.Ok
         assertTrue("expected ~70, got ${r.baselineBpm}", r.baselineBpm in 69..70)
     }
 
@@ -72,13 +75,19 @@ class BaselineCalibrationTest {
      */
     @Test
     fun `a span of exactly the required length is not rejected as too short`() {
-        val r = BaselineCalibration.reduce(spanning(BaselineCalibration.DURATION_MS - 1_000L))
+        val r = BaselineCalibration.reduce(
+            spanning(BaselineCalibration.DURATION_MS - 1_000L),
+            stoppedEarly = false,
+        )
         assertNotEquals(CalibrationResult.Failed(CalibrationResult.Failure.TOO_SHORT), r)
     }
 
     @Test
     fun `a span one millisecond short of the required length is rejected as too short`() {
-        val r = BaselineCalibration.reduce(spanning(BaselineCalibration.DURATION_MS - 1_000L - 1L))
+        val r = BaselineCalibration.reduce(
+            spanning(BaselineCalibration.DURATION_MS - 1_000L - 1L),
+            stoppedEarly = true,
+        )
         assertEquals(CalibrationResult.Failed(CalibrationResult.Failure.TOO_SHORT), r)
     }
 
@@ -95,7 +104,7 @@ class BaselineCalibrationTest {
     fun `an empty session is rejected as too short`() {
         assertEquals(
             CalibrationResult.Failed(CalibrationResult.Failure.TOO_SHORT),
-            BaselineCalibration.reduce(emptyList()),
+            BaselineCalibration.reduce(emptyList(), stoppedEarly = true),
         )
     }
 
@@ -106,7 +115,7 @@ class BaselineCalibrationTest {
         }
         assertEquals(
             CalibrationResult.Failed(CalibrationResult.Failure.POOR_CONTACT),
-            BaselineCalibration.reduce(samples),
+            BaselineCalibration.reduce(samples, stoppedEarly = false),
         )
     }
 
@@ -115,7 +124,7 @@ class BaselineCalibrationTest {
         val samples = steady(300, 62).mapIndexed { i, s ->
             if (i % 10 == 0) s.copy(contactOk = false) else s   // 10% bad
         }
-        assertTrue(BaselineCalibration.reduce(samples) is CalibrationResult.Ok)
+        assertTrue(BaselineCalibration.reduce(samples, stoppedEarly = false) is CalibrationResult.Ok)
     }
 
     @Test
@@ -126,7 +135,7 @@ class BaselineCalibrationTest {
         }
         assertEquals(
             CalibrationResult.Failed(CalibrationResult.Failure.TOO_VARIABLE),
-            BaselineCalibration.reduce(samples),
+            BaselineCalibration.reduce(samples, stoppedEarly = false),
         )
     }
 
@@ -135,7 +144,7 @@ class BaselineCalibrationTest {
         val samples = (0 until 300).map {
             CalibrationSample(it * 1000L, if (it % 2 == 0) 60 else 63, true)
         }
-        assertTrue(BaselineCalibration.reduce(samples) is CalibrationResult.Ok)
+        assertTrue(BaselineCalibration.reduce(samples, stoppedEarly = false) is CalibrationResult.Ok)
     }
 
     @Test
@@ -151,7 +160,7 @@ class BaselineCalibrationTest {
         val samples = settling + afterSettle
         assertEquals(
             CalibrationResult.Failed(CalibrationResult.Failure.INSUFFICIENT_DATA),
-            BaselineCalibration.reduce(samples),
+            BaselineCalibration.reduce(samples, stoppedEarly = false),
         )
     }
 
@@ -171,7 +180,7 @@ class BaselineCalibrationTest {
         val samples = settling + sparse
         assertEquals(
             CalibrationResult.Failed(CalibrationResult.Failure.INSUFFICIENT_DATA),
-            BaselineCalibration.reduce(samples),
+            BaselineCalibration.reduce(samples, stoppedEarly = false),
         )
     }
 
@@ -185,7 +194,7 @@ class BaselineCalibrationTest {
         }
         assertEquals(
             CalibrationResult.Failed(CalibrationResult.Failure.TOO_VARIABLE),
-            BaselineCalibration.reduce(samples),
+            BaselineCalibration.reduce(samples, stoppedEarly = false),
         )
     }
 }

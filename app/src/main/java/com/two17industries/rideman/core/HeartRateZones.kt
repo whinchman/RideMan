@@ -19,9 +19,23 @@ object HeartRateZones {
 
     private val PERCENTS = listOf(0.50, 0.60, 0.70, 0.80, 0.90)
 
+    /**
+     * Whether [baselineHr] is usable as a Karvonen baseline against [maxHr].
+     *
+     * A baseline at or above max HR is not a physiological result — one of the two numbers is
+     * wrong — so it must never be used to compute reserve. This is the single definition of that
+     * rule: [lowerBounds] uses it to decide whether to apply the reserve, and
+     * [com.two17industries.rideman.ui.HeartRateCalibrationScreen] uses it to decide whether a
+     * freshly-calibrated result may be saved at all. The two must stay exact complements — a
+     * baseline the screen accepts and every zone calculation then discards is the bug this
+     * function exists to make structurally impossible.
+     */
+    fun baselineUsable(baselineHr: Int?, maxHr: Int?): Boolean =
+        baselineHr != null && maxHr != null && baselineHr < maxHr
+
     /** Lower BPM bound of each of the five zones, ascending. */
     fun lowerBounds(maxHr: Int, baselineHr: Int?): List<Int> {
-        val useReserve = baselineHr != null && baselineHr < maxHr
+        val useReserve = baselineUsable(baselineHr, maxHr)
         return if (useReserve) {
             val reserve = maxHr - baselineHr!!
             PERCENTS.map { (baselineHr + it * reserve).roundToInt() }

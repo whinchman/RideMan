@@ -2,10 +2,36 @@ package com.two17industries.rideman.core
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HeartRateZonesTest {
+
+    @Test
+    fun `baselineUsable is true below max`() {
+        assertTrue(HeartRateZones.baselineUsable(60, 200))
+    }
+
+    @Test
+    fun `baselineUsable is false when equal to max`() {
+        assertFalse(HeartRateZones.baselineUsable(200, 200))
+    }
+
+    @Test
+    fun `baselineUsable is false above max`() {
+        assertFalse(HeartRateZones.baselineUsable(210, 200))
+    }
+
+    @Test
+    fun `baselineUsable is false with a null baseline`() {
+        assertFalse(HeartRateZones.baselineUsable(null, 200))
+    }
+
+    @Test
+    fun `baselineUsable is false with a null max`() {
+        assertFalse(HeartRateZones.baselineUsable(60, null))
+    }
 
     @Test
     fun `without a baseline zones are straight percentages of max`() {
@@ -98,6 +124,17 @@ class HeartRateZonesTest {
         val samples = listOf<Pair<Long, Int?>>(0L to 105, 1_000L to 105, 601_000L to 105)
         val result = HeartRateZones.timeInZoneMs(samples, 200, null)
         assertEquals(1_000L, result[1])
+    }
+
+    @Test
+    fun `timeInZoneMs credits nothing across a dropout shorter than the gap cap`() {
+        // A strap dropout of only 2s — well inside MAX_GAP_MS — must still credit nothing,
+        // because rule 1 (both endpoints need a reading) applies independently of rule 2 (the
+        // gap cap). Under a cap-only implementation this interval is short enough to survive
+        // and would wrongly credit 4s to zone 1; the "both endpoints" rule is what stops that.
+        val samples = listOf<Pair<Long, Int?>>(0L to 105, 2_000L to null, 4_000L to 125)
+        val result = HeartRateZones.timeInZoneMs(samples, 200, null)
+        assertArrayEquals(longArrayOf(0, 0, 0, 0, 0, 0), result)
     }
 
     @Test

@@ -72,13 +72,12 @@ object BaselineCalibration {
      * Without it, a strap that dropped at minute four of a five-minute session yields a
      * four-minute span, and a rider who sat perfectly still is told they stopped early.
      *
-     * Defaulted to true (the historical reading, "a short span means the rider stopped") so the
-     * behavioural tests that pin the session-length gate still say what they meant. Production
-     * callers pass the real outcome explicitly.
+     * Required rather than defaulted: a caller who forgets it should not silently get
+     * TOO_SHORT, and every caller — production or test — knows which outcome it is modelling.
      */
     fun reduce(
         samples: List<CalibrationSample>,
-        stoppedEarly: Boolean = true,
+        stoppedEarly: Boolean,
     ): CalibrationResult {
         // A short span is the rider's fault only if the rider ended the session. If it ran its
         // full length and the data is still short, the readings did not arrive — a strap

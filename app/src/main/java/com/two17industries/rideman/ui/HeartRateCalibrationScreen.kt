@@ -32,6 +32,7 @@ import com.two17industries.rideman.ble.BleConnectionState
 import com.two17industries.rideman.core.BaselineCalibration
 import com.two17industries.rideman.core.CalibrationResult
 import com.two17industries.rideman.core.CalibrationSample
+import com.two17industries.rideman.core.HeartRateZones
 import com.two17industries.rideman.hrm.HrmBleClient
 import com.two17industries.rideman.hrm.HrmBus
 import com.two17industries.rideman.hrm.HrmStatus
@@ -219,11 +220,12 @@ fun HeartRateCalibrationScreen(
                 val r = result
                 // A seated baseline at or above max HR is not a physiological result — one of
                 // the two numbers is wrong. Rejected here, at the point of saving, rather than
-                // stored: HeartRateZones.lowerBounds guards with `baselineHr < maxHr` and falls
-                // back to percent-of-max, so storing it would leave Settings displaying a
-                // calibration that every zone calculation ignores. Showing the rider a value
-                // that is not in use is the one outcome to avoid.
-                val aboveMax = r is CalibrationResult.Ok && maxHr != null && r.baselineBpm >= maxHr
+                // stored: HeartRateZones.lowerBounds guards with the same HeartRateZones.
+                // baselineUsable check and falls back to percent-of-max, so storing it would
+                // leave Settings displaying a calibration that every zone calculation ignores.
+                // Showing the rider a value that is not in use is the one outcome to avoid.
+                val aboveMax = r is CalibrationResult.Ok && maxHr != null &&
+                    !HeartRateZones.baselineUsable(r.baselineBpm, maxHr)
                 Text(
                     when {
                         aboveMax -> {

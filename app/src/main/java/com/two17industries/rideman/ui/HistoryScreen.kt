@@ -23,7 +23,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,7 +31,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.two17industries.rideman.core.HeartRateZones
 import com.two17industries.rideman.core.Plan
 import com.two17industries.rideman.core.PlanAttempt
@@ -43,7 +41,6 @@ import com.two17industries.rideman.core.Units
 import com.two17industries.rideman.core.slotsUncompletedBy
 import com.two17industries.rideman.data.RideEntity
 import com.two17industries.rideman.data.StravaUploadState
-import com.two17industries.rideman.data.effectiveMaxHeartRate
 import com.two17industries.rideman.ui.components.BackLabel
 import com.two17industries.rideman.ui.components.CheckSquare
 import com.two17industries.rideman.ui.components.HairLine
@@ -59,7 +56,6 @@ import com.two17industries.rideman.ui.theme.Surface1
 import com.two17industries.rideman.ui.theme.TextPrimary
 import com.two17industries.rideman.ui.theme.Warn
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -76,19 +72,13 @@ fun HistoryScreen(
     stravaConnected: Boolean,
     onBackfill: () -> Unit,
     onDeleteRides: (List<Long>) -> Unit,
-    // Not threaded in from RidemanNav (History's existing call site is off-limits to this
-    // change); viewModel() resolves to the same Activity-scoped instance MainActivity already
-    // created, so this is the identical RideViewModel the rest of the app uses.
-    vm: RideViewModel = viewModel(),
+    // Time in zone is never cached: an auto-raised max HR moves every zone boundary
+    // retroactively, so it is recomputed from raw samples every time a row expands.
+    maxHr: Int?,
+    baselineHr: Int?,
+    loadHeartRateSamples: suspend (Long) -> List<Pair<Long, Int>>,
 ) {
     var expandedId by remember { mutableStateOf<Long?>(null) }
-
-    val settings by vm.settings.collectAsState()
-    // Time in zone is never cached: an auto-raised max HR moves every zone boundary
-    // retroactively, so it must be recomputed from raw samples every time a row expands.
-    val year = remember { Calendar.getInstance().get(Calendar.YEAR) }
-    val maxHr = settings.effectiveMaxHeartRate(year)
-    val baselineHr = settings.baselineHeartRateBpm
 
     // Rides staged for deletion; non-empty means the confirm dialog is showing.
     var pendingDelete by remember { mutableStateOf<List<RideEntity>>(emptyList()) }
@@ -206,7 +196,7 @@ fun HistoryScreen(
                     onOpenActivity = onOpenActivity,
                     maxHr = maxHr,
                     baselineHr = baselineHr,
-                    loadHeartRateSamples = { id -> vm.heartRateSamples(id) },
+                    loadHeartRateSamples = loadHeartRateSamples,
                 )
             }
         }

@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.unit.sp
 import com.two17industries.rideman.core.PlanRide
 import com.two17industries.rideman.core.RideSummary
+import com.two17industries.rideman.data.effectiveMaxHeartRate
 import com.two17industries.rideman.ui.components.TerminalButton
 import com.two17industries.rideman.ui.theme.Cyan
 import com.two17industries.rideman.ui.theme.Surface1
@@ -32,6 +33,9 @@ fun RidemanNav(
     var dest by remember { mutableStateOf(Dest.START) }
     var lastSummary by remember { mutableStateOf<RideSummary?>(null) }
     var activePlanRide by remember { mutableStateOf<PlanRide?>(null) }
+
+    // Max HR is age-derived when not set explicitly, so it needs the current year.
+    val historyYear = remember { java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) }
 
     LaunchedEffect(dest) { onRideActiveChanged(dest == Dest.RIDE) }
 
@@ -146,6 +150,9 @@ fun RidemanNav(
                 stravaConnected = stravaConnected,
                 onBackfill = { dest = Dest.BACKFILL },
                 onDeleteRides = { vm.deleteRides(it) },
+                maxHr = settings.effectiveMaxHeartRate(historyYear),
+                baselineHr = settings.baselineHeartRateBpm,
+                loadHeartRateSamples = { id -> vm.heartRateSamples(id) },
             )
         }
         Dest.HR_CALIBRATION -> {

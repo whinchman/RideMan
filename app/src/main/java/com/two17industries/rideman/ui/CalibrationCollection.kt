@@ -20,10 +20,11 @@ import com.two17industries.rideman.core.CalibrationSample
 object CalibrationCollection {
 
     /**
-     * The span [BaselineCalibration.reduce] requires, restated here so the loop can aim at it.
-     * Keep in step with that gate; deliberately not looser.
+     * The span [BaselineCalibration.reduce] requires. Derived from the reducer's own constant
+     * rather than restated, so the two cannot drift apart: if that gate moves, this moves with
+     * it. Deliberately not looser.
      */
-    const val REQUIRED_SPAN_MS = BaselineCalibration.DURATION_MS - 1_000L
+    const val REQUIRED_SPAN_MS = BaselineCalibration.MIN_SPAN_MS
 
     /**
      * How far past the nominal end we will wait for the data to catch up. Bounded so a strap

@@ -1,6 +1,7 @@
 package com.two17industries.rideman.ui
 
 import com.two17industries.rideman.core.BaselineCalibration
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -56,10 +57,12 @@ class CalibrationCollectionTest {
 
     @Test
     fun `required span matches the reducer's gate exactly and does not relax it`() {
-        // A session whose span clears REQUIRED_SPAN_MS must be accepted by the reducer, and one
-        // that falls a millisecond short must not be — i.e. we overshoot to meet the gate rather
-        // than loosening it.
-        assertTrue(CalibrationCollection.REQUIRED_SPAN_MS >= duration - 1_000L)
+        // We aim at the reducer's own gate rather than a looser copy of it. This is an identity
+        // check, not a drift check: the gate's actual value is pinned behaviourally over in
+        // BaselineCalibrationTest, which is the test that fails if the reducer moves.
+        assertEquals(BaselineCalibration.MIN_SPAN_MS, CalibrationCollection.REQUIRED_SPAN_MS)
+        // The loop stops the moment the span clears that gate, and keeps going a millisecond
+        // short of it — i.e. we overshoot to meet the gate rather than loosening it.
         assertFalse(
             CalibrationCollection.shouldKeepCollecting(
                 elapsedMs = duration,

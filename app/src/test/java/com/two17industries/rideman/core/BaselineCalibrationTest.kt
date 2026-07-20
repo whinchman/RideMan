@@ -1,6 +1,7 @@
 package com.two17industries.rideman.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -37,6 +38,36 @@ class BaselineCalibrationTest {
     fun `a session shorter than the required duration is rejected`() {
         val r = BaselineCalibration.reduce(steady(90, 60))
         assertEquals(CalibrationResult.Failed(CalibrationResult.Failure.TOO_SHORT), r)
+    }
+
+    /**
+     * The session-length gate, pinned by behaviour rather than by arithmetic.
+     *
+     * The required span is spelled out here instead of being read from
+     * [BaselineCalibration.MIN_SPAN_MS], deliberately: a test that derives its input from the
+     * constant under test moves whenever that constant moves, and so can never detect drift.
+     * These two cases straddle the boundary, so either one fails the moment the gate shifts —
+     * which is exactly the "sat still for five minutes, told you stopped early" regression.
+     */
+    @Test
+    fun `a span of exactly the required length is not rejected as too short`() {
+        val r = BaselineCalibration.reduce(spanning(BaselineCalibration.DURATION_MS - 1_000L))
+        assertNotEquals(CalibrationResult.Failed(CalibrationResult.Failure.TOO_SHORT), r)
+    }
+
+    @Test
+    fun `a span one millisecond short of the required length is rejected as too short`() {
+        val r = BaselineCalibration.reduce(spanning(BaselineCalibration.DURATION_MS - 1_000L - 1L))
+        assertEquals(CalibrationResult.Failed(CalibrationResult.Failure.TOO_SHORT), r)
+    }
+
+    /**
+     * Steady, good-contact samples at roughly 1 Hz whose first and last stamps are exactly
+     * [spanMs] apart — so the only thing under test is the span.
+     */
+    private fun spanning(spanMs: Long): List<CalibrationSample> {
+        val ticks = (0 until spanMs / 1000).map { CalibrationSample(it * 1000L, 62, true) }
+        return ticks + CalibrationSample(spanMs, 62, true)
     }
 
     @Test

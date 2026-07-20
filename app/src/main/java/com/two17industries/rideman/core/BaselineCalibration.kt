@@ -42,6 +42,18 @@ object BaselineCalibration {
     /** Required session length: five minutes. */
     const val DURATION_MS = 300_000L
 
+    /**
+     * The shortest sample span [reduce] will accept as a full session.
+     *
+     * [DURATION_MS] minus a one-second tolerance, because a ~1 Hz strap stamps its first and
+     * last readings inside the session rather than exactly on its edges, so a perfectly
+     * performed five minutes hands us slightly under five minutes of data.
+     *
+     * This is the single definition of that gate: `reduce` applies it, and the collection loop
+     * aims at it. Do not restate the arithmetic anywhere else.
+     */
+    const val MIN_SPAN_MS = DURATION_MS - 1_000L
+
     /** Discarded at the start, to allow the rider to settle. */
     const val SETTLE_MS = 60_000L
 
@@ -56,7 +68,7 @@ object BaselineCalibration {
 
         val start = samples.first().epochMillis
         val elapsed = samples.last().epochMillis - start
-        if (elapsed < DURATION_MS - 1_000L) {
+        if (elapsed < MIN_SPAN_MS) {
             return CalibrationResult.Failed(CalibrationResult.Failure.TOO_SHORT)
         }
 

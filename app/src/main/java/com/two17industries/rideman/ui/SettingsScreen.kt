@@ -185,7 +185,6 @@ fun SettingsScreen(
                     BleConnectionState.SCANNING -> "Searching…"
                     BleConnectionState.CONNECTED -> "Connected"
                     BleConnectionState.DISCONNECTED -> "Reconnecting…"
-                    BleConnectionState.GAVE_UP -> "Not found — toggle off and on to retry"
                 }
                 Text(label, color = Muted, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 12.sp))
             }

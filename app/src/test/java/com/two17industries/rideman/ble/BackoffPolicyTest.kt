@@ -1,7 +1,6 @@
 package com.two17industries.rideman.ble
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Test
 
 class BackoffPolicyTest {
@@ -26,10 +25,15 @@ class BackoffPolicyTest {
         assertEquals(30_000L, BackoffPolicy.delayMsFor(19))
     }
 
+    /**
+     * There is no retry cap: a board brownout or a long stop must not kill the dash for the
+     * rest of the ride, and nothing re-arms it mid-ride if we give up.
+     */
     @Test
-    fun `null once the retry cap is exhausted`() {
-        assertNull(BackoffPolicy.delayMsFor(20))
-        assertNull(BackoffPolicy.delayMsFor(21))
+    fun `retries forever at the ceiling`() {
+        assertEquals(30_000L, BackoffPolicy.delayMsFor(20))
+        assertEquals(30_000L, BackoffPolicy.delayMsFor(1_000))
+        assertEquals(30_000L, BackoffPolicy.delayMsFor(Int.MAX_VALUE))
     }
 
     @Test

@@ -53,7 +53,7 @@ interface BleCentralListener {
  *
  * All calls are no-ops (never crashes) when BLE permissions are missing or Bluetooth is off.
  */
-@SuppressLint("MissingPermission") // guarded by hasBlePermissions()
+@SuppressLint("MissingPermission") // guarded by hasPermissions()
 class BleCentral(
     context: Context,
     private val serviceUuid: UUID,
@@ -74,8 +74,17 @@ class BleCentral(
     @Volatile private var attempt = 0
     private var retryJob: Job? = null
 
-    private val opQueue = ConcurrentLinkedQueue<(BluetoothGatt) -> Unit>()
+    /**
+     * A queued GATT operation and the characteristic UUID whose completion callback ends it.
+     * The tag is what lets [operationComplete] tell OUR callback from a bypassing writer's.
+     */
+    private class QueuedOp(val targetUuid: UUID, val run: (BluetoothGatt) -> Unit)
+
+    private val opQueue = ConcurrentLinkedQueue<QueuedOp>()
     private val opInFlight = AtomicBoolean(false)
+
+    /** UUID of the operation currently in flight, or null when the queue is idle. */
+    @Volatile private var inFlightUuid: UUID? = null
 
     fun gatt(): BluetoothGatt? = gatt
 
@@ -88,7 +97,7 @@ class BleCentral(
         attempt = 0
         registerAdapterReceiver()
         when {
-            !hasBlePermissions() -> { status.set(BleConnectionState.NO_PERMISSION); return }
+            !hasPermissions() -> { status.set(BleConnectionState.NO_PERMISSION); return }
             manager?.adapter?.isEnabled != true -> { status.set(BleConnectionState.BLUETOOTH_OFF); return }
         }
         startScan()
@@ -103,11 +112,12 @@ class BleCentral(
         gatt?.close()
         gatt = null
         opQueue.clear()
+        inFlightUuid = null
         opInFlight.set(false)
         status.set(BleConnectionState.DISABLED)
     }
 
-    private var adapterReceiver: BroadcastReceiver? = null
+    @Volatile private var adapterReceiver: BroadcastReceiver? = null
 
     /** Start scanning if the rider turns Bluetooth on after the ride has already begun. */
     private fun registerAdapterReceiver() {
@@ -116,7 +126,7 @@ class BleCentral(
             override fun onReceive(c: Context?, intent: Intent?) {
                 if (intent?.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
                 when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
-                    BluetoothAdapter.STATE_ON -> if (wantRunning && hasBlePermissions()) {
+                    BluetoothAdapter.STATE_ON -> if (wantRunning && hasPermissions()) {
                         attempt = 0
                         startScan()
                     }
@@ -137,21 +147,24 @@ class BleCentral(
     }
 
     /**
-     * Queue a GATT operation. [op] must issue exactly one operation that completes via a
-     * BluetoothGattCallback; the queue advances when that callback arrives.
+     * Queue a GATT operation against [targetUuid]. [op] must issue exactly one operation on the
+     * characteristic with that UUID (or its CCCD) which completes via onCharacteristicWrite /
+     * onDescriptorWrite; the queue advances only when a callback carrying [targetUuid] arrives.
      */
-    fun enqueue(op: (BluetoothGatt) -> Unit) {
-        opQueue.add(op)
+    fun enqueue(targetUuid: UUID, op: (BluetoothGatt) -> Unit) {
+        opQueue.add(QueuedOp(targetUuid, op))
         drain()
     }
 
     /** Enable notifications on [characteristic], including the mandatory CCCD write. */
     fun subscribe(characteristic: BluetoothGattCharacteristic) {
-        enqueue { g ->
+        enqueue(characteristic.uuid) { g ->
             g.setCharacteristicNotification(characteristic, true)
             val cccd = characteristic.getDescriptor(CCCD_UUID)
             if (cccd == null) {
-                operationComplete()
+                // No CCCD: no callback is coming, so complete synchronously. We are inside
+                // drain(), so inFlightUuid is this characteristic and the tag check passes.
+                operationComplete(characteristic.uuid)
             } else {
                 // API 33+ overload: value is passed rather than staged on the descriptor.
                 g.writeDescriptor(cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
@@ -163,21 +176,55 @@ class BleCentral(
         val g = gatt ?: return
         if (!opInFlight.compareAndSet(false, true)) return
         val op = opQueue.poll()
-        if (op == null) { opInFlight.set(false); return }
-        op(g)
+        if (op == null) {
+            opInFlight.set(false)
+            // LOST-WAKEUP GUARD — do not "simplify" this away. Without the re-check:
+            // thread A (in operationComplete) wins the CAS and polls null; thread B enqueues
+            // and calls drain(), whose CAS fails because A still holds the flag, so B returns;
+            // A then clears the flag. The queue is now non-empty with nothing in flight and
+            // nobody left to drain it. A subscription flow has no later enqueue() to rescue
+            // it, so the strap would connect and stay silent for the whole ride.
+            if (opQueue.isNotEmpty()) drain()
+            return
+        }
+        inFlightUuid = op.targetUuid
+        op.run(g)
     }
 
-    private fun operationComplete() {
-        // Only advance if a QUEUED operation was actually in flight. The dash writes telemetry
-        // (and time-sync) directly, bypassing the queue by design — those writes also produce
-        // onCharacteristicWrite, and advancing on them would skip a queued CCCD write and
-        // leave the strap connected but silent.
+    /**
+     * Advance the queue, but ONLY if [uuid] is the operation we actually issued. Consumers may
+     * also write outside the queue (the dash writes telemetry and time-sync directly, by
+     * design); those writes raise onCharacteristicWrite too, and advancing on one would consume
+     * the in-flight slot of a queued CCCD write and leave the strap connected but silent.
+     * Matching on the tag set in [drain] makes that impossible, rather than merely unlikely.
+     */
+    private fun operationComplete(uuid: UUID?) {
+        if (uuid == null || uuid != inFlightUuid) return
         if (!opInFlight.compareAndSet(true, false)) return
+        inFlightUuid = null
         drain()
     }
 
     private fun startScan() {
-        val s = scanner ?: return
+        // These guards are re-run on EVERY entry, not just from start(): the retry coroutine
+        // resumes minutes after its guards were last checked, and the rider may have revoked
+        // permission or turned Bluetooth off in between. Publishing the status here keeps
+        // Settings honest instead of leaving it stuck on "Searching…".
+        if (!hasPermissions()) {
+            scanning = false
+            status.set(BleConnectionState.NO_PERMISSION)
+            return
+        }
+        if (manager?.adapter?.isEnabled != true) {
+            scanning = false
+            status.set(BleConnectionState.BLUETOOTH_OFF)
+            return
+        }
+        val s = scanner ?: run {
+            scanning = false
+            status.set(BleConnectionState.BLUETOOTH_OFF)
+            return
+        }
         if (scanning) return
         scanning = true
         status.set(BleConnectionState.SCANNING)
@@ -187,26 +234,35 @@ class BleCentral(
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
-        s.startScan(listOf(filter), settings, scanCallback)
+        // The guards above are a race, not a fence: the adapter can go down between the check
+        // and this call (IllegalStateException), and permission can be revoked (SecurityException).
+        // We run on a SupervisorJob scope with no exception handler, so an escaping throw from
+        // the retry coroutine would reach the default handler and kill the process mid-ride.
+        runCatching { s.startScan(listOf(filter), settings, scanCallback) }
+            .onFailure {
+                scanning = false
+                status.set(BleConnectionState.BLUETOOTH_OFF)
+                scheduleReconnect()
+            }
     }
 
     private fun stopScan() {
         if (!scanning) return
         scanning = false
-        if (hasBlePermissions()) scanner?.stopScan(scanCallback)
+        if (hasPermissions()) scanner?.stopScan(scanCallback)
     }
 
+    /** Retries forever; [BackoffPolicy] pins the wait at 30s rather than ever giving up. */
     private fun scheduleReconnect() {
         if (!wantRunning) return
         val wait = BackoffPolicy.delayMsFor(attempt)
-        if (wait == null) {
-            status.set(BleConnectionState.GAVE_UP)
-            return
-        }
         attempt++
         retryJob?.cancel()
         retryJob = scope.launch {
             delay(wait)
+            // Cleared before startScan so that a failure path calling scheduleReconnect()
+            // does not cancel the coroutine it is currently running in.
+            retryJob = null
             if (wantRunning) startScan()
         }
     }
@@ -234,6 +290,7 @@ class BleCentral(
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     opQueue.clear()
+                    inFlightUuid = null
                     opInFlight.set(false)
                     g.close()
                     if (gatt === g) gatt = null
@@ -255,7 +312,9 @@ class BleCentral(
         }
 
         override fun onDescriptorWrite(g: BluetoothGatt, d: BluetoothGattDescriptor, status_: Int) {
-            operationComplete()
+            // Tag by the OWNING characteristic: every CCCD shares the same descriptor UUID,
+            // so the descriptor's own UUID would not identify which subscription completed.
+            operationComplete(d.characteristic?.uuid)
         }
 
         override fun onCharacteristicWrite(
@@ -263,7 +322,7 @@ class BleCentral(
             c: BluetoothGattCharacteristic,
             status_: Int,
         ) {
-            operationComplete()
+            operationComplete(c.uuid)
         }
 
         override fun onCharacteristicChanged(
@@ -275,7 +334,12 @@ class BleCentral(
         }
     }
 
-    private fun hasBlePermissions(): Boolean =
+    /**
+     * True when both runtime BLE permissions are held. Public so consumers that touch [gatt]
+     * directly (the dash's bypassing telemetry writes) can guard themselves with the same
+     * check instead of duplicating the ContextCompat logic.
+     */
+    fun hasPermissions(): Boolean =
         ContextCompat.checkSelfPermission(appContext, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
             ContextCompat.checkSelfPermission(appContext, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
 

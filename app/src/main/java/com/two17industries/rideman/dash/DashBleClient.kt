@@ -21,10 +21,14 @@ import kotlinx.coroutines.CoroutineScope
  * dropped — there is nothing anywhere that would surface the failure.
  *
  * The queue in [BleCentral] exists for subscriptions (the HRM's CCCD write), not for these.
- * [BleCentral.operationComplete] ignores write callbacks that did not come from a queued
- * operation, so these bypassing writes cannot advance someone else's queue.
+ * BleCentral tags each queued operation with the characteristic UUID it targets and advances
+ * the queue only on a callback carrying that UUID, so these bypassing writes cannot advance
+ * someone else's queue even while a queued operation is genuinely in flight.
+ *
+ * Both write paths call [BleCentral.hasPermissions] themselves: they use the raw
+ * [BluetoothGatt] and so never pass through BleCentral's own permission guards.
  */
-@SuppressLint("MissingPermission") // guarded inside BleCentral
+@SuppressLint("MissingPermission") // guarded by central.hasPermissions() in each method
 class DashBleClient(context: Context, scope: CoroutineScope) : BleCentralListener {
 
     @Volatile private var characteristic: BluetoothGattCharacteristic? = null
@@ -47,6 +51,7 @@ class DashBleClient(context: Context, scope: CoroutineScope) : BleCentralListene
     }
 
     fun write(bytes: ByteArray) {
+        if (!central.hasPermissions()) return
         val g = central.gatt() ?: return
         val c = characteristic ?: return
         g.writeCharacteristic(c, bytes, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
@@ -58,6 +63,7 @@ class DashBleClient(context: Context, scope: CoroutineScope) : BleCentralListene
      * has no clock. MUST only be called from the broadcaster's 1 Hz ticker (see class KDoc).
      */
     fun writeTime(bytes: ByteArray) {
+        if (!central.hasPermissions()) return
         val g = central.gatt() ?: return
         val c = timeChar ?: return
         g.writeCharacteristic(c, bytes, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)

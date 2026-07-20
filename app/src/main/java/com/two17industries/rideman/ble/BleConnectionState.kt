@@ -13,6 +13,4 @@ enum class BleConnectionState {
     SCANNING,
     CONNECTED,
     DISCONNECTED,
-    /** Backoff exhausted — stopped trying until the feature is restarted. */
-    GAVE_UP,
 }

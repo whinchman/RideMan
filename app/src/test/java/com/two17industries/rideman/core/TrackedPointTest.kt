@@ -37,7 +37,18 @@ class TrackedPointTest {
     }
 
     @Test
-    fun `a reading from the future is dropped rather than accepted`() {
+    fun `a future reading inside the freshness window is still dropped`() {
+        // 2s ahead is within MAX_AGE_MS (5s) in absolute terms, so this only passes under
+        // correct signed handling (age = -2000 < 0 -> dropped). A naive abs(age) > MAX_AGE_MS
+        // implementation would wrongly accept it (abs(-2000) = 2000 <= 5000), so this is the
+        // case that actually discriminates signed handling from the bug it guards against.
+        val fixMillis = 10_000L
+        val hr = HeartRateSample(epochMillis = fixMillis + 2_000L, bpm = 142, contactOk = true)
+        assertNull(HeartRateStamp.bpmFor(fixMillis = fixMillis, hr = hr))
+    }
+
+    @Test
+    fun `a reading from the far future is dropped rather than accepted`() {
         // Clock skew between the strap callback and the GPS fix must not admit a bogus sample.
         val hr = HeartRateSample(epochMillis = 30_000L, bpm = 142, contactOk = true)
         assertNull(HeartRateStamp.bpmFor(fixMillis = 10_000L, hr = hr))

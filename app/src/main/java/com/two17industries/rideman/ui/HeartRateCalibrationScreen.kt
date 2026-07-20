@@ -21,7 +21,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,7 +45,10 @@ import com.two17industries.rideman.ui.theme.Cyan
 import com.two17industries.rideman.ui.theme.Muted
 import com.two17industries.rideman.ui.theme.TextPrimary
 import com.two17industries.rideman.ui.theme.bigMetric
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -89,15 +91,27 @@ fun HeartRateCalibrationScreen(
     var result by remember { mutableStateOf<CalibrationResult?>(null) }
     val samples = remember { mutableListOf<CalibrationSample>() }
 
-    // Scoped to the composition, so cancelling it tears down the client's own coroutines.
-    val scope = rememberCoroutineScope()
+    // Deliberately NOT rememberCoroutineScope(): BleCentral documents that it runs on a
+    // SupervisorJob scope with no exception handler, and every framework call in it is
+    // runCatching-wrapped on that premise. rememberCoroutineScope() hands back a plain Job
+    // parented to the Recomposer, so an escaping throw would cancel siblings and propagate into
+    // the Recomposer — a frozen or blank UI, not the failure mode the client was hardened for.
+    // LocationForegroundService builds its client's scope the same way this does.
+    //
+    // Keyed on hrmAddress so it is rebuilt in step with the client below: the effect cancels
+    // this scope on dispose, and a cancelled scope must never be handed to the next client.
+    val scope = remember(hrmAddress) { CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate) }
 
     // The strap connects on entry and disconnects on exit — including via back, the BackLabel,
     // and SAVE BASELINE, all of which leave this composition.
     DisposableEffect(hrmAddress) {
         val client = HrmBleClient(context.applicationContext, scope)
         client.start(hrmAddress)
-        onDispose { client.stop() }
+        onDispose {
+            // stop() is fully synchronous, so the disconnect completes before the scope dies.
+            client.stop()
+            scope.cancel()
+        }
     }
 
     // The rider watches a countdown for five minutes without touching the screen, so the display

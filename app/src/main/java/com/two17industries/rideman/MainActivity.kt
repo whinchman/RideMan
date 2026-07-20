@@ -11,10 +11,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.two17industries.rideman.data.RideOrientation
 import com.two17industries.rideman.ui.RideViewModel
 import com.two17industries.rideman.ui.RidemanNav
 import com.two17industries.rideman.ui.theme.RidemanTheme
@@ -51,21 +56,34 @@ class MainActivity : ComponentActivity() {
         val vm: RideViewModel = viewModel()
         rideViewModel = vm
         val settings by vm.settings.collectAsState()
-        RidemanTheme(theme = settings.theme) {
-            Surface(modifier = Modifier.fillMaxSize()) {
-                RidemanNav(vm = vm, onRideActiveChanged = ::onRideActive)
+        var rideActive by remember { mutableStateOf(false) }
+
+        // Orientation is applied from the persisted setting, not from how the phone is held, and
+        // re-applied whenever the rotate button flips it. The manifest declares
+        // configChanges="orientation|..." so this recomposes without recreating the activity.
+        LaunchedEffect(rideActive, settings.rideOrientation) {
+            requestedOrientation = if (!rideActive) {
+                ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            } else when (settings.rideOrientation) {
+                RideOrientation.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                RideOrientation.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             }
         }
-    }
 
-    private fun onRideActive(active: Boolean) {
-        if (active) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            // Freeze whatever orientation the ride started in so a bump can't flip the display mid-glance.
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
-        } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        RidemanTheme(theme = settings.theme) {
+            Surface(modifier = Modifier.fillMaxSize()) {
+                RidemanNav(
+                    vm = vm,
+                    onRideActiveChanged = { active ->
+                        rideActive = active
+                        if (active) {
+                            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        } else {
+                            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        }
+                    },
+                )
+            }
         }
     }
 }

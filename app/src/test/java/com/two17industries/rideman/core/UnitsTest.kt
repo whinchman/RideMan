@@ -32,4 +32,31 @@ class UnitsTest {
         assertEquals("KM", Units.distanceLabel(UnitSystem.METRIC))
         assertEquals("M", Units.altitudeLabel(UnitSystem.METRIC))
     }
+    @Test fun duration_zero() {
+        assertEquals("0:00", Units.duration(0L))
+    }
+    @Test fun duration_seconds_only() {
+        assertEquals("0:07", Units.duration(7_000L))
+    }
+    @Test fun duration_pads_seconds() {
+        assertEquals("1:05", Units.duration(65_000L))
+    }
+    @Test fun duration_minutes() {
+        assertEquals("24:18", Units.duration(24 * 60_000L + 18_000L))
+    }
+    @Test fun duration_rolls_over_to_hours() {
+        assertEquals("1:00:00", Units.duration(3_600_000L))
+    }
+    @Test fun duration_just_under_an_hour() {
+        assertEquals("59:59", Units.duration(3_599_000L))
+    }
+    @Test fun duration_hours_pad_minutes_and_seconds() {
+        assertEquals("1:04:08", Units.duration(3_600_000L + 4 * 60_000L + 8_000L))
+    }
+    @Test fun duration_truncates_partial_seconds() {
+        assertEquals("0:01", Units.duration(1_999L))
+    }
+    @Test fun duration_clamps_negative_to_zero() {
+        assertEquals("0:00", Units.duration(-5_000L))
+    }
 }

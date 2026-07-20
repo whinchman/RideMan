@@ -11,10 +11,25 @@ import com.two17industries.rideman.core.UnitSystem
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-/** The five ride sub-screens, in their default order. Stored as a CSV of names. */
-enum class RideScreen { SPEED, ODOMETER, COMPASS, ALTITUDE, CADENCE }
+/**
+ * The ride sub-screens, in their default order.
+ *
+ * GRID is the 2x2 "Dash" readout (Speed/Distance/Duration/Heading). It is named GRID, not DASH,
+ * because `dash/` is already the T-Display BLE handlebar dashboard — different feature entirely.
+ *
+ * Stored as a CSV of names; presence in the CSV also means "enabled".
+ */
+enum class RideScreen { GRID, SPEED, ODOMETER, COMPASS, ALTITUDE, CADENCE }
 
 enum class ThemeChoice { AMBER, ACID_GREEN, ELECTRIC_CYAN, HOT_MAGENTA }
+
+/** Ride display orientation. Sticky across rides; toggled only by the ride screen's rotate button. */
+enum class RideOrientation {
+    PORTRAIT,
+    LANDSCAPE;
+
+    fun flipped(): RideOrientation = if (this == PORTRAIT) LANDSCAPE else PORTRAIT
+}
 
 data class RidemanSettings(
     val units: UnitSystem = UnitSystem.AMERICAN,
@@ -24,6 +39,7 @@ data class RidemanSettings(
     val theme: ThemeChoice = ThemeChoice.AMBER,
     val stravaUploadEnabled: Boolean = true,
     val dashEnabled: Boolean = false,
+    val rideOrientation: RideOrientation = RideOrientation.PORTRAIT,
 )
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -37,16 +53,19 @@ class SettingsStore(private val context: Context) {
         val THEME = stringPreferencesKey("theme")
         val STRAVA_UPLOAD = booleanPreferencesKey("strava_upload_enabled")
         val DASH_ENABLED = booleanPreferencesKey("dash_enabled")
+        val GRID_MIGRATED = booleanPreferencesKey("grid_migrated")
+        val RIDE_ORIENTATION = stringPreferencesKey("ride_orientation")
     }
 
     val settings: Flow<RidemanSettings> = context.dataStore.data.map { p ->
         RidemanSettings(
             units = p[Keys.UNITS]?.let { runCatching { UnitSystem.valueOf(it) }.getOrNull() }
                 ?: UnitSystem.AMERICAN,
-            screenOrder = p[Keys.ORDER]?.split(",")
-                ?.mapNotNull { runCatching { RideScreen.valueOf(it) }.getOrNull() }
-                ?.ifEmpty { RideScreen.entries.toList() }
-                ?: RideScreen.entries.toList(),
+            screenOrder = ScreenOrder.migrate(
+                saved = p[Keys.ORDER]?.split(",")
+                    ?.mapNotNull { runCatching { RideScreen.valueOf(it) }.getOrNull() },
+                alreadyMigrated = p[Keys.GRID_MIGRATED] ?: false,
+            ),
             cadenceMode = p[Keys.CADENCE_MODE]?.let { runCatching { CadenceMode.valueOf(it) }.getOrNull() }
                 ?: CadenceMode.FULL,
             targetRpm = p[Keys.TARGET_RPM] ?: 80,
@@ -54,6 +73,9 @@ class SettingsStore(private val context: Context) {
                 ?: ThemeChoice.AMBER,
             stravaUploadEnabled = p[Keys.STRAVA_UPLOAD] ?: true,
             dashEnabled = p[Keys.DASH_ENABLED] ?: false,
+            rideOrientation = p[Keys.RIDE_ORIENTATION]
+                ?.let { runCatching { RideOrientation.valueOf(it) }.getOrNull() }
+                ?: RideOrientation.PORTRAIT,
         )
     }
 
@@ -66,6 +88,8 @@ class SettingsStore(private val context: Context) {
             p[Keys.THEME] = s.theme.name
             p[Keys.STRAVA_UPLOAD] = s.stravaUploadEnabled
             p[Keys.DASH_ENABLED] = s.dashEnabled
+            p[Keys.GRID_MIGRATED] = true
+            p[Keys.RIDE_ORIENTATION] = s.rideOrientation.name
         }
     }
 }

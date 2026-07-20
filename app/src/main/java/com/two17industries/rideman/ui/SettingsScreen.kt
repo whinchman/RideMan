@@ -6,9 +6,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,11 +20,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -33,9 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.two17industries.rideman.core.Cadence
@@ -46,7 +44,16 @@ import com.two17industries.rideman.dash.DashStatus
 import com.two17industries.rideman.data.RideScreen
 import com.two17industries.rideman.data.RidemanSettings
 import com.two17industries.rideman.data.ThemeChoice
+import com.two17industries.rideman.ui.components.CheckSquare
+import com.two17industries.rideman.ui.components.PromptLabel
+import com.two17industries.rideman.ui.components.TerminalButton
+import com.two17industries.rideman.ui.components.TerminalButtonStyle
+import com.two17industries.rideman.ui.components.glow
 import com.two17industries.rideman.ui.theme.Background
+import com.two17industries.rideman.ui.theme.Cyan
+import com.two17industries.rideman.ui.theme.Dim
+import com.two17industries.rideman.ui.theme.Muted
+import com.two17industries.rideman.ui.theme.TextPrimary
 import com.two17industries.rideman.ui.theme.accentFor
 
 @Composable
@@ -75,17 +82,16 @@ fun SettingsScreen(
         )
     }
 
-    // Preview the picked theme live so the whole screen recolors as you choose.
-    val accent = accentFor(theme)
-
+    // Menu chrome is always cyan: the user's accent drives the ride and end screens only.
+    // The four swatches below still render in their own colours — that is the live preview.
     Column(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
             .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(28.dp),
+            .padding(horizontal = 20.dp, vertical = 22.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -94,56 +100,58 @@ fun SettingsScreen(
         ) {
             Text(
                 "SETTINGS",
-                color = accent,
-                fontSize = 34.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 1.sp,
+                color = Cyan,
+                style = MaterialTheme.typography.titleLarge
+                    .copy(fontSize = 24.sp, letterSpacing = 0.7.sp)
+                    .glow(Cyan, blurRadius = 7f),
             )
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .border(2.dp, accent, RoundedCornerShape(50))
+                    .border(1.dp, Cyan.copy(alpha = 0.4f), RectangleShape)
                     .clickable(onClick = onCancel)
-                    .padding(horizontal = 18.dp, vertical = 10.dp),
+                    .padding(horizontal = 14.dp, vertical = 7.dp),
             ) {
-                Text("CANCEL", color = accent, fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                Text(
+                    "CANCEL",
+                    color = Cyan,
+                    style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.sp, letterSpacing = 0.7.sp),
+                )
             }
         }
 
-        Section("UNITS", accent) {
-            PillRow {
+        Section("UNITS") {
+            SegmentRow {
                 UnitSystem.entries.forEach { opt ->
-                    OptionPill(
+                    SegmentCell(
                         text = if (opt == UnitSystem.AMERICAN) "American" else "Metric",
                         selected = opt == units,
-                        accent = accent,
+                        modifier = Modifier.weight(1f),
                     ) { units = opt }
                 }
             }
         }
 
-        Section("CADENCE PULSE", accent) {
-            PillRow {
+        Section("CADENCE PULSE") {
+            SegmentRow {
                 CadenceMode.entries.forEach { opt ->
-                    OptionPill(
+                    SegmentCell(
                         text = if (opt == CadenceMode.FULL) "Same foot" else "Alternating",
                         selected = opt == cadenceMode,
-                        accent = accent,
+                        modifier = Modifier.weight(1f),
                     ) { cadenceMode = opt }
                 }
             }
             Stepper(
                 value = targetRpm,
-                accent = accent,
                 onDec = { targetRpm = Cadence.clampRpm(targetRpm - 5) },
                 onInc = { targetRpm = Cadence.clampRpm(targetRpm + 5) },
             )
         }
 
-        Section("COLOR THEME", accent) {
-            PillRow {
+        Section("COLOR THEME", hint = "· drives ride display") {
+            SwatchRow {
                 ThemeChoice.entries.forEach { opt ->
-                    ColorPill(
+                    ColorSwatch(
                         label = themeName(opt),
                         color = accentFor(opt),
                         selected = opt == theme,
@@ -152,18 +160,21 @@ fun SettingsScreen(
             }
         }
 
-        Section("HANDLEBAR DASHBOARD", accent) {
+        Section("HANDLEBAR DASHBOARD") {
             val dashState by DashStatus.state.collectAsState()
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("T-Display over BLE", color = accent, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                OptionPill(
+                Text(
+                    "T-Display over BLE",
+                    color = TextPrimary,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 14.sp),
+                )
+                SegmentCell(
                     text = if (dashEnabled) "On" else "Off",
                     selected = dashEnabled,
-                    accent = accent,
                 ) { dashEnabled = !dashEnabled }
             }
             if (dashEnabled) {
@@ -173,60 +184,55 @@ fun SettingsScreen(
                     DashConnectionState.DISCONNECTED -> "Disconnected"
                     DashConnectionState.DISABLED -> "Idle (starts with your ride)"
                 }
-                Text(label, color = accent.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(label, color = Muted, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 12.sp))
             }
         }
 
-        Section("STRAVA", accent) {
+        Section("STRAVA") {
             if (stravaConnected) {
                 Text(
                     "Connected" + (stravaAthleteName?.let { " as $it" } ?: ""),
-                    color = accent, fontSize = 17.sp, fontWeight = FontWeight.Bold,
+                    color = Cyan,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 14.sp),
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Auto-upload rides", color = accent, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                    OptionPill(
+                    Text(
+                        "Auto-upload rides",
+                        color = TextPrimary,
+                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = 14.sp),
+                    )
+                    SegmentCell(
                         text = if (stravaUploadEnabled) "On" else "Off",
                         selected = stravaUploadEnabled,
-                        accent = accent,
                     ) { stravaUploadEnabled = !stravaUploadEnabled }
                 }
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .border(2.dp, accent, RoundedCornerShape(50))
-                        .clickable(onClick = onDisconnectStrava)
-                        .padding(horizontal = 22.dp, vertical = 13.dp),
-                ) { Text("DISCONNECT", color = accent, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+                TerminalButton(
+                    text = "DISCONNECT",
+                    onClick = onDisconnectStrava,
+                    style = TerminalButtonStyle.SECONDARY,
+                    fontSize = 13.sp,
+                )
             } else {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(accent)
-                        .clickable(onClick = onConnectStrava)
-                        .padding(horizontal = 22.dp, vertical = 14.dp),
-                ) { Text("CONNECT TO STRAVA", color = Background, fontSize = 16.sp, fontWeight = FontWeight.Bold) }
+                TerminalButton(
+                    text = "> CONNECT TO STRAVA",
+                    onClick = onConnectStrava,
+                    style = TerminalButtonStyle.PRIMARY,
+                    fontSize = 14.sp,
+                )
             }
         }
 
-        Section("RIDE SCREENS", accent) {
-            Text(
-                "Tap to enable · arrows reorder",
-                color = accent.copy(alpha = 0.6f),
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-            )
+        Section("RIDE SCREENS", hint = "· tap to enable · arrows reorder") {
             screenItems.forEachIndexed { index, (screen, enabled) ->
                 OrderRow(
                     name = screenName(screen),
                     enabled = enabled,
                     isFirst = index == 0,
                     isLast = index == screenItems.lastIndex,
-                    accent = accent,
                     onToggle = {
                         screenItems = screenItems.toMutableList().also { it[index] = screen to !enabled }
                     },
@@ -244,9 +250,10 @@ fun SettingsScreen(
             }
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(4.dp))
 
-        Button(
+        TerminalButton(
+            text = "SAVE",
             onClick = {
                 val order = screenItems.filter { it.second }.map { it.first }
                 onSave(
@@ -262,45 +269,93 @@ fun SettingsScreen(
                 )
                 onDone()
             },
-            colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Background),
-            modifier = Modifier.fillMaxWidth().height(64.dp),
-        ) { Text("SAVE", fontSize = 22.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp) }
+            style = TerminalButtonStyle.PRIMARY,
+            fontSize = 18.sp,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
 @Composable
-private fun Section(title: String, accent: Color, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(title, color = accent, fontSize = 15.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+private fun Section(title: String, hint: String? = null, content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
+        PromptLabel(
+            title,
+            color = Cyan,
+            fontSize = 11.sp,
+            letterSpacing = 1.8.sp,
+            trailing = hint,
+            trailingColor = Dim,
+        )
         content()
+    }
+}
+
+@Composable
+private fun SegmentRow(content: @Composable RowScope.() -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        content = content,
+    )
+}
+
+/** Sharp segmented-control cell: selected is a solid cyan fill with near-black text; else a hairline outline. */
+@Composable
+private fun SegmentCell(
+    text: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .then(
+                if (selected) Modifier.background(Cyan, RectangleShape)
+                else Modifier.border(1.dp, Cyan.copy(alpha = 0.3f), RectangleShape)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text,
+            color = if (selected) Background else Cyan,
+            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 13.sp),
+            maxLines = 1,
+            softWrap = false,
+        )
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PillRow(content: @Composable () -> Unit) {
+private fun SwatchRow(content: @Composable () -> Unit) {
     FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
+        verticalArrangement = Arrangement.spacedBy(9.dp),
     ) { content() }
 }
 
+/** Sharp accent swatch. Selected takes a 2dp white ring. These are the live accent preview. */
 @Composable
-private fun OptionPill(text: String, selected: Boolean, accent: Color, onClick: () -> Unit) {
+private fun ColorSwatch(label: String, color: Color, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(if (selected) accent else Color.Transparent)
-            .border(2.dp, accent, RoundedCornerShape(50))
+            .background(color, RectangleShape)
+            .border(
+                width = if (selected) 2.dp else 0.dp,
+                color = if (selected) Color.White else Color.Transparent,
+                shape = RectangleShape,
+            )
             .clickable(onClick = onClick)
-            .padding(horizontal = 22.dp, vertical = 13.dp),
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text,
-            color = if (selected) Background else accent,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.Bold,
+            label,
+            color = Color.Black,
+            style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.sp, letterSpacing = 0.sp),
             maxLines = 1,
             softWrap = false,
         )
@@ -308,54 +363,50 @@ private fun OptionPill(text: String, selected: Boolean, accent: Color, onClick: 
 }
 
 @Composable
-private fun ColorPill(label: String, color: Color, selected: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(color)
-            .border(
-                width = if (selected) 3.dp else 0.dp,
-                color = if (selected) Color.White else Color.Transparent,
-                shape = RoundedCornerShape(50),
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 22.dp, vertical = 14.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, color = Color.Black, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
-    }
-}
-
-@Composable
-private fun Stepper(value: Int, accent: Color, onDec: () -> Unit, onInc: () -> Unit) {
+private fun Stepper(value: Int, onDec: () -> Unit, onInc: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        StepButton("−", accent, onDec) // minus sign
+        StepButton("−", onDec) // minus sign
         Column(
             modifier = Modifier.weight(1f),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("$value", color = accent, fontSize = 40.sp, fontWeight = FontWeight.Black)
-            Text("TARGET RPM", color = accent, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+            Text(
+                "$value",
+                color = Cyan,
+                style = MaterialTheme.typography.titleLarge
+                    .copy(fontSize = 34.sp, letterSpacing = 0.sp)
+                    .glow(Cyan, blurRadius = 6f),
+            )
+            Text(
+                "TARGET RPM",
+                color = Muted,
+                style = MaterialTheme.typography.labelLarge.copy(fontSize = 11.sp, letterSpacing = 1.5.sp),
+                modifier = Modifier.padding(top = 3.dp),
+            )
         }
-        StepButton("+", accent, onInc)
+        StepButton("+", onInc)
     }
 }
 
+/** Square, outlined, no fill — the old circular filled StepButton is gone. */
 @Composable
-private fun StepButton(label: String, accent: Color, onClick: () -> Unit) {
+private fun StepButton(label: String, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(64.dp)
-            .clip(CircleShape)
-            .background(accent)
+            .size(52.dp)
+            .border(1.dp, Cyan, RectangleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = Background, fontSize = 32.sp, fontWeight = FontWeight.Black)
+        Text(
+            label,
+            color = Cyan,
+            style = MaterialTheme.typography.titleLarge.copy(fontSize = 26.sp, letterSpacing = 0.sp),
+        )
     }
 }
 
@@ -365,7 +416,6 @@ private fun OrderRow(
     enabled: Boolean,
     isFirst: Boolean,
     isLast: Boolean,
-    accent: Color,
     onToggle: () -> Unit,
     onUp: () -> Unit,
     onDown: () -> Unit,
@@ -375,45 +425,44 @@ private fun OrderRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(if (enabled) accent else Color.Transparent)
-                .border(2.dp, accent, RoundedCornerShape(10.dp))
-                .clickable(onClick = onToggle),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (enabled) Text("✓", color = Background, fontSize = 22.sp, fontWeight = FontWeight.Black)
-        }
+        CheckSquare(
+            checked = enabled,
+            modifier = Modifier.clickable(onClick = onToggle),
+            accent = Cyan,
+            size = 40.dp,
+            glyphSize = 16.sp,
+        )
         Text(
             name,
             modifier = Modifier.weight(1f),
-            color = if (enabled) accent else accent.copy(alpha = 0.4f),
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
+            color = if (enabled) Cyan else Cyan.copy(alpha = 0.4f),
+            style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, letterSpacing = 0.sp),
         )
-        ArrowButton("▲", enabled = !isFirst, accent = accent, onClick = onUp)
-        ArrowButton("▼", enabled = !isLast, accent = accent, onClick = onDown)
+        ArrowButton("▲", enabled = !isFirst, onClick = onUp)
+        ArrowButton("▼", enabled = !isLast, onClick = onDown)
     }
 }
 
 @Composable
-private fun ArrowButton(glyph: String, enabled: Boolean, accent: Color, onClick: () -> Unit) {
-    val tint = if (enabled) accent else accent.copy(alpha = 0.25f)
+private fun ArrowButton(glyph: String, enabled: Boolean, onClick: () -> Unit) {
+    val tint = if (enabled) Cyan.copy(alpha = 0.9f) else Cyan.copy(alpha = 0.25f)
     Box(
         modifier = Modifier
             .size(44.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .border(2.dp, tint, RoundedCornerShape(10.dp))
+            .border(
+                1.dp,
+                if (enabled) Cyan.copy(alpha = 0.35f) else Cyan.copy(alpha = 0.15f),
+                RectangleShape,
+            )
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(glyph, color = tint, fontSize = 18.sp, fontWeight = FontWeight.Black)
+        Text(glyph, color = tint, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 14.sp))
     }
 }
 
 private fun screenName(screen: RideScreen): String = when (screen) {
+    RideScreen.GRID -> "Dash"
     RideScreen.SPEED -> "Speed"
     RideScreen.ODOMETER -> "Odometer"
     RideScreen.COMPASS -> "Compass"

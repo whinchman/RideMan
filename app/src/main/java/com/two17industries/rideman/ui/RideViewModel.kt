@@ -25,12 +25,14 @@ import com.two17industries.rideman.strava.StravaTokenStore
 import com.two17industries.rideman.strava.StravaUploadScheduler
 import com.two17industries.rideman.BuildConfig
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 data class RideUiState(
@@ -148,6 +150,7 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startRide(planRideId: String? = null) {
         activePlanRideId = planRideId
+        _ui.value = RideUiState()
         collectorJobs.forEach { it.cancel() }
         collectorJobs.clear()
         startMillis = System.currentTimeMillis()
@@ -161,6 +164,7 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
         LocationForegroundService.start(getApplication())
         collectorJobs += collectLocation()
         collectorJobs += collectSensors()
+        collectorJobs += collectElapsed()
     }
 
     private fun collectLocation() = viewModelScope.launch {
@@ -187,8 +191,21 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
                 distanceM = t.distanceM,
                 headingDeg = sample.headingDeg,
                 altitudeM = displayedAltitude(),
-                elapsedMs = System.currentTimeMillis() - startMillis,
             )
+        }
+    }
+
+    /**
+     * Drives elapsedMs at 1 Hz, independent of the location stream.
+     *
+     * This used to be computed inside collectLocation(), which meant the ride clock froze
+     * whenever GPS fixes stopped — under trees, in a garage, in a tunnel. Nothing rendered it
+     * then; the dash does now.
+     */
+    private fun collectElapsed() = viewModelScope.launch {
+        while (isActive) {
+            _ui.value = _ui.value.copy(elapsedMs = System.currentTimeMillis() - startMillis)
+            delay(1_000L)
         }
     }
 
@@ -242,5 +259,17 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
 
     fun saveSettings(updated: RidemanSettings) {
         viewModelScope.launch { settingsStore.save(updated) }
+    }
+
+    /**
+     * Flips the ride display between portrait and landscape and persists the choice.
+     *
+     * Sticky by design: the next ride opens in whatever orientation you last rode in, so a
+     * bar-mounted rider never has to correct it. The rotate button is the only control — this
+     * is deliberately not surfaced in Settings.
+     */
+    fun toggleRideOrientation() {
+        val current = settings.value
+        saveSettings(current.copy(rideOrientation = current.rideOrientation.flipped()))
     }
 }

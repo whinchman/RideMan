@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import com.two17industries.rideman.core.UnitSystem
 import com.two17industries.rideman.core.Units
 import com.two17industries.rideman.ui.theme.LocalAccent
+import com.two17industries.rideman.ui.theme.bigMetric
 import kotlin.math.roundToInt
 
 /** The canonical one-value-per-screen layout: small label, huge number, unit. */
@@ -29,7 +30,7 @@ fun BigMetric(label: String, value: String, unit: String) {
         Text(
             value,
             color = accent,
-            style = MaterialTheme.typography.displayLarge,
+            style = bigMetric,
             textAlign = TextAlign.Center,
         )
         Text(unit, color = accent, style = MaterialTheme.typography.titleLarge)
@@ -58,7 +59,7 @@ fun AltimeterScreen(altitudeM: Double, units: UnitSystem) {
     BigMetric("ALTITUDE", v.roundToInt().toString(), Units.altitudeLabel(units))
 }
 
-private fun cardinal(deg: Float): String {
+internal fun cardinal(deg: Float): String {
     val dirs = listOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
     val idx = (((deg % 360f) + 360f) % 360f / 45f).roundToInt() % 8
     return dirs[idx]

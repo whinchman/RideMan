@@ -9,18 +9,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.two17industries.rideman.BuildConfig
@@ -28,7 +27,17 @@ import com.two17industries.rideman.core.PlanGrading
 import com.two17industries.rideman.core.PlanRide
 import com.two17industries.rideman.core.UnitSystem
 import com.two17industries.rideman.core.Units
-import com.two17industries.rideman.ui.theme.LocalAccent
+import com.two17industries.rideman.ui.components.BlinkingCursor
+import com.two17industries.rideman.ui.components.HairLine
+import com.two17industries.rideman.ui.components.PromptLabel
+import com.two17industries.rideman.ui.components.TerminalButton
+import com.two17industries.rideman.ui.components.TerminalButtonStyle
+import com.two17industries.rideman.ui.components.TerminalPanel
+import com.two17industries.rideman.ui.components.glow
+import com.two17industries.rideman.ui.theme.Cyan
+import com.two17industries.rideman.ui.theme.Dim
+import com.two17industries.rideman.ui.theme.Muted
+import com.two17industries.rideman.ui.theme.TextPrimary
 
 @Composable
 fun StartScreen(
@@ -40,66 +49,128 @@ fun StartScreen(
     onHistory: () -> Unit,
     onSettings: () -> Unit,
 ) {
-    val accent = LocalAccent.current
-    BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(24.dp)) {
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 22.dp, vertical = 24.dp)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .heightIn(min = maxHeight),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+            verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(
-                "BIKEMAN",
-                color = accent,
-                style = MaterialTheme.typography.displayLarge.copy(fontSize = 64.sp),
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(48.dp))
+            Column(Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        ">",
+                        color = Muted,
+                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = 24.sp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "RIDEMAN",
+                        color = Cyan,
+                        style = MaterialTheme.typography.titleLarge
+                            .copy(fontSize = 26.sp, letterSpacing = 0.8.sp)
+                            .glow(Cyan),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    BlinkingCursor(modifier = Modifier.padding(bottom = 2.dp))
+                }
 
-            Button(
-                onClick = onPlanRide,
-                enabled = planAvailable,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = accent,
-                    disabledContainerColor = accent.copy(alpha = 0.20f),
-                ),
-                modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp),
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("PLAN RIDE", style = MaterialTheme.typography.titleLarge)
-                    val subtitle = when {
-                        !planAvailable -> "plan unavailable"
-                        nextUp != null -> "Next: Wk ${nextUp.week} · Ride ${nextUp.slot} — " +
-                            "${formatPlanDistance(nextUp.targetMiles, units)} ${nextUp.pace.name.lowercase()}"
-                        else -> "Plan complete 🎉"
+                Spacer(Modifier.height(18.dp))
+                HairLine()
+                Spacer(Modifier.height(18.dp))
+
+                TerminalPanel(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                        PromptLabel("NEXT UP")
+                        Spacer(Modifier.height(9.dp))
+                        when {
+                            !planAvailable -> Text(
+                                "PLAN UNAVAILABLE",
+                                color = Muted,
+                                style = MaterialTheme.typography.titleLarge
+                                    .copy(fontSize = 17.sp, letterSpacing = 0.7.sp),
+                            )
+                            nextUp != null -> {
+                                Text(
+                                    "WK ${nextUp.week} · RIDE ${nextUp.slot}",
+                                    color = Cyan,
+                                    style = MaterialTheme.typography.titleLarge
+                                        .copy(fontSize = 17.sp, letterSpacing = 0.7.sp)
+                                        .glow(Cyan, blurRadius = 5f),
+                                )
+                                Spacer(Modifier.height(5.dp))
+                                Row {
+                                    Text(
+                                        "${formatPlanDistance(nextUp.targetMiles, units)} - ${nextUp.kind}",
+                                        color = TextPrimary,
+                                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = 13.sp),
+                                    )
+                                    Text(
+                                        " · ${nextUp.pace.name.lowercase()}",
+                                        color = Muted,
+                                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = 13.sp),
+                                    )
+                                }
+                            }
+                            else -> Text(
+                                "PLAN COMPLETE",
+                                color = Cyan,
+                                style = MaterialTheme.typography.titleLarge
+                                    .copy(fontSize = 17.sp, letterSpacing = 0.7.sp)
+                                    .glow(Cyan, blurRadius = 5f),
+                            )
+                        }
                     }
-                    Text(subtitle, style = MaterialTheme.typography.bodyLarge)
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-
-            OutlinedButton(onClick = onFreeRide, modifier = Modifier.fillMaxWidth().height(72.dp)) {
-                Text("FREE RIDE", color = accent, style = MaterialTheme.typography.titleLarge)
-            }
-            Spacer(Modifier.height(16.dp))
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(onClick = onHistory, modifier = Modifier.weight(1f).height(56.dp)) {
-                    Text("HISTORY", color = accent, style = MaterialTheme.typography.labelLarge)
-                }
-                OutlinedButton(onClick = onSettings, modifier = Modifier.weight(1f).height(56.dp)) {
-                    Text("SETTINGS", color = accent, style = MaterialTheme.typography.labelLarge)
                 }
             }
 
-            Spacer(Modifier.height(48.dp))
-            Text(
-                "v${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE}) · ${BuildConfig.GIT_COMMIT}",
-                color = accent.copy(alpha = 0.5f),
-                style = MaterialTheme.typography.bodyLarge,
-            )
+            Column(Modifier.fillMaxWidth().padding(top = 40.dp)) {
+                TerminalButton(
+                    text = "> PLAN RIDE",
+                    onClick = onPlanRide,
+                    enabled = planAvailable,
+                    style = TerminalButtonStyle.PRIMARY,
+                    trailing = "→",
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(10.dp))
+                TerminalButton(
+                    text = "> FREE RIDE",
+                    onClick = onFreeRide,
+                    style = TerminalButtonStyle.SECONDARY,
+                    trailing = "→",
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TerminalButton(
+                        text = "HISTORY",
+                        onClick = onHistory,
+                        fontSize = 12.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TerminalButton(
+                        text = "SETTINGS",
+                        onClick = onSettings,
+                        fontSize = 12.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+
+                Spacer(Modifier.height(18.dp))
+                Text(
+                    "v${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE}) · ${BuildConfig.GIT_COMMIT}",
+                    color = Dim,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 11.sp),
+                )
+            }
         }
     }
 }

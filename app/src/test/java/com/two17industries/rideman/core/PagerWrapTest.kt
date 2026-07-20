@@ -23,4 +23,13 @@ class PagerWrapTest {
         val mid = PagerWrap.startPage(count = 5)
         assertEquals(0, PagerWrap.screenIndex(mid, 5))
     }
+    @Test fun wraps_with_six_screens() {
+        assertEquals(0, PagerWrap.screenIndex(0, 6))
+        assertEquals(5, PagerWrap.screenIndex(5, 6))
+        assertEquals(0, PagerWrap.screenIndex(6, 6))
+        assertEquals(5, PagerWrap.screenIndex(-1, 6))
+    }
+    @Test fun start_page_lands_on_index_zero_with_six_screens() {
+        assertEquals(0, PagerWrap.screenIndex(PagerWrap.startPage(count = 6), 6))
+    }
 }

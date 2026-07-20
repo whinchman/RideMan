@@ -2,6 +2,7 @@ package com.two17industries.rideman
 
 import android.Manifest
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -18,12 +19,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.two17industries.rideman.data.RideOrientation
 import com.two17industries.rideman.ui.RideViewModel
 import com.two17industries.rideman.ui.RidemanNav
 import com.two17industries.rideman.ui.theme.RidemanTheme
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 
 class MainActivity : ComponentActivity() {
 
@@ -31,31 +38,48 @@ class MainActivity : ComponentActivity() {
 
     private val _permissionsGranted = MutableStateFlow<Map<String, Boolean>>(emptyMap())
 
+    /**
+     * Whether both BLE permissions are held, threaded down to Settings so it can offer GRANT.
+     *
+     * Settings cannot infer this from HrmStatus: that only reports NO_PERMISSION while a BLE
+     * client is actually running, and no client runs while the rider is sitting on the Settings
+     * screen. This flow is the only signal available at the point the rider is in a position to
+     * act on it — and being a flow, the GRANT affordance disappears the moment the permission is
+     * granted, which a checkSelfPermission read inside composition would not do.
+     */
+    private val blePermissionsGranted: StateFlow<Boolean> = _permissionsGranted
+        .map { granted -> BLE_PERMISSIONS.all { granted[it] == true } }
+        .stateIn(lifecycleScope, SharingStarted.Eagerly, false)
+
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { result ->
-        // Previously empty: a denial was silently swallowed, and the BLE clients degraded
-        // with no explanation. Record it so Settings can say what is missing.
-        _permissionsGranted.value = result
+    ) {
+        // Previously empty: a denial was silently swallowed, and the BLE clients degraded with
+        // no explanation. The launcher's own result is not used — checkSelfPermission is ground
+        // truth and agrees with it here, while also covering permissions granted outside the app.
+        refreshPermissionState()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        permissionLauncher.launch(
-            arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.POST_NOTIFICATIONS,
-                Manifest.permission.BLUETOOTH_SCAN,
-                Manifest.permission.BLUETOOTH_CONNECT,
-            )
-        )
+        refreshPermissionState()
+        permissionLauncher.launch(REQUESTED_PERMISSIONS)
         setContent { App() }
     }
 
     override fun onResume() {
         super.onResume()
+        // Catches a permission granted from the system Settings app while we were backgrounded,
+        // which produces no launcher result.
+        refreshPermissionState()
         rideViewModel?.refreshStravaConnection()
+    }
+
+    private fun refreshPermissionState() {
+        _permissionsGranted.value = REQUESTED_PERMISSIONS.associateWith {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }
     }
 
     @Composable
@@ -81,6 +105,7 @@ class MainActivity : ComponentActivity() {
             Surface(modifier = Modifier.fillMaxSize()) {
                 RidemanNav(
                     vm = vm,
+                    blePermissionsGranted = blePermissionsGranted,
                     onRideActiveChanged = { active ->
                         rideActive = active
                         if (active) {
@@ -89,13 +114,20 @@ class MainActivity : ComponentActivity() {
                             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                         }
                     },
-                    onRequestBlePermissions = {
-                        permissionLauncher.launch(
-                            arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
-                        )
-                    },
+                    onRequestBlePermissions = { permissionLauncher.launch(BLE_PERMISSIONS) },
                 )
             }
         }
+    }
+
+    private companion object {
+        val BLE_PERMISSIONS = arrayOf(
+            Manifest.permission.BLUETOOTH_SCAN,
+            Manifest.permission.BLUETOOTH_CONNECT,
+        )
+        val REQUESTED_PERMISSIONS = arrayOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) + BLE_PERMISSIONS
     }
 }

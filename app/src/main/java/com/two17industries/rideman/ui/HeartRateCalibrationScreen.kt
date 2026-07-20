@@ -1,5 +1,10 @@
 package com.two17industries.rideman.ui
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.os.SystemClock
+import android.view.WindowManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,15 +14,18 @@ import androidx.compose.foundation.clickable
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -25,6 +33,7 @@ import com.two17industries.rideman.ble.BleConnectionState
 import com.two17industries.rideman.core.BaselineCalibration
 import com.two17industries.rideman.core.CalibrationResult
 import com.two17industries.rideman.core.CalibrationSample
+import com.two17industries.rideman.hrm.HrmBleClient
 import com.two17industries.rideman.hrm.HrmBus
 import com.two17industries.rideman.hrm.HrmStatus
 import com.two17industries.rideman.ui.components.BackLabel
@@ -37,44 +46,108 @@ import com.two17industries.rideman.ui.theme.Cyan
 import com.two17industries.rideman.ui.theme.Muted
 import com.two17industries.rideman.ui.theme.TextPrimary
 import com.two17industries.rideman.ui.theme.bigMetric
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Five minutes seated, reduced to a baseline heart rate by [BaselineCalibration].
  *
  * Note the honest framing in the copy: this is a *seated baseline*, not a clinical resting
  * heart rate, which is measured on waking and reads meaningfully lower.
+ *
+ * This screen owns its own strap connection for the length of its composition. It has to: the
+ * only other [HrmBleClient] in the app is built by LocationForegroundService, which runs only
+ * during a ride, and this screen is reachable only from Settings — that is, only when no ride is
+ * active. Without a client of its own, HrmStatus would read DISABLED on arrival, HrmBus would be
+ * empty, and START would be permanently disabled over a "Heart rate off" label. A five-minute
+ * *seated* calibration is by definition not performed mid-ride, so the feature would never be
+ * usable at all.
+ *
+ * The two clients therefore can never be live at the same time, and
+ * LocationForegroundService.clientsRequested is not a concern here: reaching this screen
+ * requires passing through Settings, which requires no ride in progress, and starting a ride
+ * requires leaving this screen. Recorded so the next reader does not have to re-derive it.
  */
 @Composable
 fun HeartRateCalibrationScreen(
+    hrmAddress: String?,
     onSave: (baselineBpm: Int, atMillis: Long) -> Unit,
     onDone: () -> Unit,
 ) {
+    val context = LocalContext.current
     val hrmState by HrmStatus.state.collectAsState()
     val liveBpm by HrmBus.latest.collectAsState()
 
     var running by remember { mutableStateOf(false) }
+    // STOP sets this rather than clearing `running`, so there is exactly one place that reduces
+    // and `running` stays true until the result exists — otherwise the moment between clearing
+    // `running` and the reduction landing would flash the start screen.
+    var stopRequested by remember { mutableStateOf(false) }
     var elapsedMs by remember { mutableLongStateOf(0L) }
     var result by remember { mutableStateOf<CalibrationResult?>(null) }
     val samples = remember { mutableListOf<CalibrationSample>() }
 
-    // Collect every reading while running, and stop at the full duration.
+    // Scoped to the composition, so cancelling it tears down the client's own coroutines.
+    val scope = rememberCoroutineScope()
+
+    // The strap connects on entry and disconnects on exit — including via back, the BackLabel,
+    // and SAVE BASELINE, all of which leave this composition.
+    DisposableEffect(hrmAddress) {
+        val client = HrmBleClient(context.applicationContext, scope)
+        client.start(hrmAddress)
+        onDispose { client.stop() }
+    }
+
+    // The rider watches a countdown for five minutes without touching the screen, so the display
+    // would otherwise sleep at the system timeout — often 30 seconds — taking the countdown, the
+    // live BPM and the STOP button behind a lock screen. Held only while a session is running;
+    // rides hold the same flag independently from MainActivity, and the two never overlap.
+    DisposableEffect(running) {
+        val window = context.findActivity()?.window
+        if (running) window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
+
+    // Collect every reading while running, and stop once the *data* covers the full duration.
     LaunchedEffect(running) {
         if (!running) return@LaunchedEffect
-        val startedAt = System.currentTimeMillis()
-        while (running && elapsedMs < BaselineCalibration.DURATION_MS) {
-            HrmBus.latest.value?.let { hr ->
-                if (samples.lastOrNull()?.epochMillis != hr.epochMillis) {
+        stopRequested = false
+        // elapsedRealtime, not currentTimeMillis: the latter is not monotonic, and an NTP
+        // correction mid-session would stall the loop (backward jump) or end it early (forward
+        // jump). Sample stamps stay on epochMillis — the reducer compares against those.
+        val startedAt = SystemClock.elapsedRealtime()
+
+        // Collected, not polled: a 250 ms poll of HrmBus.latest can miss a reading that is
+        // superseded between ticks. The epochMillis dedupe still guards against a conflated
+        // StateFlow re-emitting the value that is already the newest sample.
+        val collector = launch {
+            HrmBus.latest.collect { hr ->
+                if (hr != null && samples.lastOrNull()?.epochMillis != hr.epochMillis) {
                     samples.add(CalibrationSample(hr.epochMillis, hr.bpm, hr.contactOk))
                 }
             }
+        }
+
+        while (
+            !stopRequested &&
+            CalibrationCollection.shouldKeepCollecting(
+                elapsedMs = elapsedMs,
+                sampleSpanMs = CalibrationCollection.spanMs(samples),
+            )
+        ) {
             delay(250)
-            elapsedMs = System.currentTimeMillis() - startedAt
+            elapsedMs = SystemClock.elapsedRealtime() - startedAt
         }
-        if (running) {
-            running = false
-            result = BaselineCalibration.reduce(samples.toList())
-        }
+        collector.cancel()
+
+        // reduce() is O(n^2) over ~300 samples; off the main thread so the last frame of the
+        // countdown does not stutter.
+        val captured = samples.toList()
+        val reduced = withContext(Dispatchers.Default) { BaselineCalibration.reduce(captured) }
+        result = reduced
+        running = false
     }
 
     Column(
@@ -144,6 +217,7 @@ fun HeartRateCalibrationScreen(
             }
 
             running -> {
+                // Clamped at zero, so the overshoot past the nominal end still reads a clean 0:00.
                 val remaining = ((BaselineCalibration.DURATION_MS - elapsedMs) / 1000).coerceAtLeast(0)
                 Text(
                     liveBpm?.bpm?.toString() ?: "--",
@@ -166,7 +240,7 @@ fun HeartRateCalibrationScreen(
                 )
                 TerminalButton(
                     text = "STOP",
-                    onClick = { running = false; result = BaselineCalibration.reduce(samples.toList()) },
+                    onClick = { stopRequested = true },
                     fontSize = 13.sp,
                     modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
                 )
@@ -193,4 +267,14 @@ fun HeartRateCalibrationScreen(
             }
         }
     }
+}
+
+/** Walks the ContextWrapper chain to the hosting Activity, for the keep-screen-on flag. */
+private fun Context.findActivity(): Activity? {
+    var current: Context? = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return null
 }

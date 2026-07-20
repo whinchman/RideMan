@@ -18,12 +18,14 @@ import com.two17industries.rideman.ui.components.TerminalButton
 import com.two17industries.rideman.ui.theme.Cyan
 import com.two17industries.rideman.ui.theme.Surface1
 import com.two17industries.rideman.ui.theme.TextPrimary
+import kotlinx.coroutines.flow.StateFlow
 
 private enum class Dest { START, SETTINGS, RIDE, END, PLAN_PICKER, HISTORY, BACKFILL, HR_CALIBRATION }
 
 @Composable
 fun RidemanNav(
     vm: RideViewModel,
+    blePermissionsGranted: StateFlow<Boolean>,
     onRideActiveChanged: (Boolean) -> Unit,
     onRequestBlePermissions: () -> Unit,
 ) {
@@ -39,6 +41,7 @@ fun RidemanNav(
     val allRides by vm.allRides.collectAsState()
     val stravaConnected by vm.stravaConnected.collectAsState()
     val stravaAthleteName by vm.stravaAthleteName.collectAsState()
+    val bleGranted by blePermissionsGranted.collectAsState()
 
     // The auto-raise happens at ride save, which can resolve after the rider has already
     // navigated away from END — so this dialog is collected here, not scoped to a Dest branch.
@@ -123,6 +126,7 @@ fun RidemanNav(
                 onDone = { dest = Dest.START },
                 onCancel = { dest = Dest.START },
                 onOpenCalibration = { dest = Dest.HR_CALIBRATION },
+                blePermissionsGranted = bleGranted,
                 onRequestBlePermissions = onRequestBlePermissions,
             )
         }
@@ -147,6 +151,9 @@ fun RidemanNav(
         Dest.HR_CALIBRATION -> {
             BackHandler { dest = Dest.SETTINGS }
             HeartRateCalibrationScreen(
+                // The screen connects the strap itself for the length of its composition — no
+                // ride is running here, so nothing else would.
+                hrmAddress = settings.hrmAddress,
                 onSave = { bpm, at ->
                     vm.saveSettings(
                         settings.copy(baselineHeartRateBpm = bpm, baselineCalibratedAtMillis = at)

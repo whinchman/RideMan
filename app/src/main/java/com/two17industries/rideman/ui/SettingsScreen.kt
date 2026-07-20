@@ -76,6 +76,7 @@ fun SettingsScreen(
     onDone: () -> Unit,
     onCancel: () -> Unit,
     onOpenCalibration: () -> Unit,
+    blePermissionsGranted: Boolean,
     onRequestBlePermissions: () -> Unit,
 ) {
     var units by remember { mutableStateOf(current.units) }
@@ -261,13 +262,23 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    // HrmStatus only reports NO_PERMISSION while a BLE client is running, and
+                    // none runs while the rider is sitting here — so a missing permission would
+                    // otherwise read as the bare "Heart rate off", with no way to act on it.
+                    // blePermissionsGranted is what makes this visible at the point it matters.
+                    val permissionMissing =
+                        !blePermissionsGranted || hrmState == BleConnectionState.NO_PERMISSION
                     Text(
-                        hrmStatusLabel(hrmState),
+                        if (permissionMissing) {
+                            hrmStatusLabel(BleConnectionState.NO_PERMISSION)
+                        } else {
+                            hrmStatusLabel(hrmState)
+                        },
                         color = Muted,
                         style = MaterialTheme.typography.bodyLarge.copy(fontSize = 12.sp),
                         modifier = Modifier.weight(1f),
                     )
-                    if (hrmState == BleConnectionState.NO_PERMISSION) {
+                    if (permissionMissing) {
                         SegmentCell(text = "GRANT", selected = false) { onRequestBlePermissions() }
                     }
                 }

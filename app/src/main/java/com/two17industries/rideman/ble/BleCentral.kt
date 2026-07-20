@@ -153,17 +153,31 @@ class BleCentral(
      * If a consumer ever needs two operations on ONE connection (e.g. reading the strap's
      * Battery Level 0x180F as well as subscribing), serialisation becomes genuinely necessary
      * and must be reintroduced deliberately — with a real consumer to test it against.
+     *
+     * Returns true when the CCCD write was actually issued, false when it could not be. This
+     * distinction matters because both failure paths below return before any write happens, so
+     * [onDescriptorWrite]'s disconnect-on-failure recovery never runs for them — without an
+     * explicit signal here, [onReady] would return true, [BleCentral] would publish CONNECTED,
+     * and the strap would sit there silently forever: connected but dead, indistinguishable
+     * from broken hardware. Callers must treat false the same as a failed connection.
      */
-    fun subscribe(characteristic: BluetoothGattCharacteristic) {
-        if (!hasPermissions()) return
-        val g = gatt ?: return
+    fun subscribe(characteristic: BluetoothGattCharacteristic): Boolean {
+        if (!hasPermissions()) {
+            // Silence here is worse than for other guards: the rider can act on NO_PERMISSION,
+            // but a bare disconnect (or nothing at all) tells them nothing is wrong.
+            status.set(BleConnectionState.NO_PERMISSION)
+            return false
+        }
+        val g = gatt ?: return false
         g.setCharacteristicNotification(characteristic, true)
-        // A characteristic with no CCCD cannot be subscribed to over the air. Nothing to do
-        // and nothing to throw about: the local notification flag is set, and a peer that
-        // advertises NOTIFY without a CCCD is simply out of spec and will stay silent.
-        val cccd = characteristic.getDescriptor(CCCD_UUID) ?: return
+        // A characteristic with no CCCD cannot be subscribed to over the air. The peer that
+        // advertises NOTIFY without a CCCD is simply out of spec and can never notify, so
+        // returning false is enough — the caller refuses the connection and BleCentral's
+        // existing reconnect path takes over.
+        val cccd = characteristic.getDescriptor(CCCD_UUID) ?: return false
         // API 33+ overload: value is passed rather than staged on the descriptor.
         g.writeDescriptor(cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+        return true
     }
 
     private fun startScan() {

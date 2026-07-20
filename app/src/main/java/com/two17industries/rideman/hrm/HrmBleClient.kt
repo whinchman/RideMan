@@ -43,9 +43,9 @@ class HrmBleClient(context: Context, scope: CoroutineScope) : BleCentralListener
             ?.getCharacteristic(HrmBleContract.MEASUREMENT_UUID)
             ?: return false
         // subscribe() does the CCCD write as well — setCharacteristicNotification alone
-        // leaves the strap connected but silent.
-        central.subscribe(ch)
-        return true
+        // leaves the strap connected but silent. Its return value must propagate: a strap
+        // that cannot be subscribed to is a failed connection, not a connected one.
+        return central.subscribe(ch)
     }
 
     override fun onDisconnected() {

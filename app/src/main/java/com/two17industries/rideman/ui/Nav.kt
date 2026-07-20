@@ -1,6 +1,9 @@
 package com.two17industries.rideman.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -8,13 +11,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.unit.sp
 import com.two17industries.rideman.core.PlanRide
 import com.two17industries.rideman.core.RideSummary
+import com.two17industries.rideman.ui.components.TerminalButton
+import com.two17industries.rideman.ui.theme.Cyan
+import com.two17industries.rideman.ui.theme.Surface1
+import com.two17industries.rideman.ui.theme.TextPrimary
 
-private enum class Dest { START, SETTINGS, RIDE, END, PLAN_PICKER, HISTORY, BACKFILL }
+private enum class Dest { START, SETTINGS, RIDE, END, PLAN_PICKER, HISTORY, BACKFILL, HR_CALIBRATION }
 
 @Composable
-fun RidemanNav(vm: RideViewModel, onRideActiveChanged: (Boolean) -> Unit) {
+fun RidemanNav(
+    vm: RideViewModel,
+    onRideActiveChanged: (Boolean) -> Unit,
+    onRequestBlePermissions: () -> Unit,
+) {
     var dest by remember { mutableStateOf(Dest.START) }
     var lastSummary by remember { mutableStateOf<RideSummary?>(null) }
     var activePlanRide by remember { mutableStateOf<PlanRide?>(null) }
@@ -27,6 +39,41 @@ fun RidemanNav(vm: RideViewModel, onRideActiveChanged: (Boolean) -> Unit) {
     val allRides by vm.allRides.collectAsState()
     val stravaConnected by vm.stravaConnected.collectAsState()
     val stravaAthleteName by vm.stravaAthleteName.collectAsState()
+
+    // The auto-raise happens at ride save, which can resolve after the rider has already
+    // navigated away from END — so this dialog is collected here, not scoped to a Dest branch.
+    val maxHrRaised by vm.maxHrRaised.collectAsState()
+    maxHrRaised?.let { raise ->
+        AlertDialog(
+            onDismissRequest = { vm.clearMaxHrRaised() },
+            containerColor = Surface1,
+            titleContentColor = TextPrimary,
+            textContentColor = TextPrimary,
+            title = {
+                Text(
+                    "MAX HEART RATE RAISED",
+                    color = Cyan,
+                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 16.sp),
+                )
+            },
+            text = {
+                Text(
+                    if (raise.from != null) {
+                        "Your ride held ${raise.to} bpm, above your previous ${raise.from}. " +
+                            "Zones have been updated — including on past rides. " +
+                            "You can change this in Settings."
+                    } else {
+                        "Your ride held ${raise.to} bpm. Zones are now based on ${raise.to} bpm. " +
+                            "You can change this in Settings."
+                    },
+                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 13.sp),
+                )
+            },
+            confirmButton = {
+                TerminalButton(text = "OK", onClick = { vm.clearMaxHrRaised() }, fontSize = 13.sp)
+            },
+        )
+    }
 
     when (dest) {
         Dest.START -> {
@@ -75,6 +122,8 @@ fun RidemanNav(vm: RideViewModel, onRideActiveChanged: (Boolean) -> Unit) {
                 onSave = { vm.saveSettings(it) },
                 onDone = { dest = Dest.START },
                 onCancel = { dest = Dest.START },
+                onOpenCalibration = { dest = Dest.HR_CALIBRATION },
+                onRequestBlePermissions = onRequestBlePermissions,
             )
         }
         Dest.HISTORY -> {
@@ -93,6 +142,17 @@ fun RidemanNav(vm: RideViewModel, onRideActiveChanged: (Boolean) -> Unit) {
                 stravaConnected = stravaConnected,
                 onBackfill = { dest = Dest.BACKFILL },
                 onDeleteRides = { vm.deleteRides(it) },
+            )
+        }
+        Dest.HR_CALIBRATION -> {
+            BackHandler { dest = Dest.SETTINGS }
+            HeartRateCalibrationScreen(
+                onSave = { bpm, at ->
+                    vm.saveSettings(
+                        settings.copy(baselineHeartRateBpm = bpm, baselineCalibratedAtMillis = at)
+                    )
+                },
+                onDone = { dest = Dest.SETTINGS },
             )
         }
         Dest.BACKFILL -> {

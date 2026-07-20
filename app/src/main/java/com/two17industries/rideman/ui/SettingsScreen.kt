@@ -39,22 +39,31 @@ import androidx.compose.ui.unit.sp
 import com.two17industries.rideman.ble.BleConnectionState
 import com.two17industries.rideman.core.Cadence
 import com.two17industries.rideman.core.CadenceMode
+import com.two17industries.rideman.core.MaxHeartRate
 import com.two17industries.rideman.core.UnitSystem
 import com.two17industries.rideman.dash.DashStatus
 import com.two17industries.rideman.data.RideScreen
 import com.two17industries.rideman.data.RidemanSettings
 import com.two17industries.rideman.data.ThemeChoice
+import com.two17industries.rideman.hrm.HrmStatus
 import com.two17industries.rideman.ui.components.CheckSquare
+import com.two17industries.rideman.ui.components.HairLine
 import com.two17industries.rideman.ui.components.PromptLabel
 import com.two17industries.rideman.ui.components.TerminalButton
 import com.two17industries.rideman.ui.components.TerminalButtonStyle
 import com.two17industries.rideman.ui.components.glow
+import com.two17industries.rideman.ui.ride.hrmStatusLabel
 import com.two17industries.rideman.ui.theme.Background
+import com.two17industries.rideman.ui.theme.BorderCyanDim
 import com.two17industries.rideman.ui.theme.Cyan
 import com.two17industries.rideman.ui.theme.Dim
 import com.two17industries.rideman.ui.theme.Muted
 import com.two17industries.rideman.ui.theme.TextPrimary
 import com.two17industries.rideman.ui.theme.accentFor
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun SettingsScreen(
@@ -66,6 +75,8 @@ fun SettingsScreen(
     onSave: (RidemanSettings) -> Unit,
     onDone: () -> Unit,
     onCancel: () -> Unit,
+    onOpenCalibration: () -> Unit,
+    onRequestBlePermissions: () -> Unit,
 ) {
     var units by remember { mutableStateOf(current.units) }
     var cadenceMode by remember { mutableStateOf(current.cadenceMode) }
@@ -79,6 +90,39 @@ fun SettingsScreen(
         mutableStateOf(
             current.screenOrder.map { it to true } +
                 (RideScreen.entries - current.screenOrder.toSet()).map { it to false }
+        )
+    }
+    var hrmEnabled by remember { mutableStateOf(current.hrmEnabled) }
+    var hrmAddress by remember { mutableStateOf(current.hrmAddress) }
+    var birthYear by remember { mutableIntStateOf(current.birthYear ?: DEFAULT_BIRTH_YEAR) }
+    var birthYearSet by remember { mutableStateOf(current.birthYear != null) }
+    var maxHr by remember { mutableStateOf(current.maxHeartRateBpm) }
+    var showPicker by remember { mutableStateOf(false) }
+
+    fun buildSettings(): RidemanSettings {
+        val order = screenItems.filter { it.second }.map { it.first }
+        return current.copy(
+            units = units,
+            cadenceMode = cadenceMode,
+            targetRpm = targetRpm,
+            theme = theme,
+            screenOrder = order.ifEmpty { RideScreen.entries.toList() },
+            stravaUploadEnabled = stravaUploadEnabled,
+            dashEnabled = dashEnabled,
+            hrmEnabled = hrmEnabled,
+            hrmAddress = hrmAddress,
+            birthYear = if (birthYearSet) birthYear else null,
+            maxHeartRateBpm = maxHr,
+        )
+        // baselineHeartRateBpm and baselineCalibratedAtMillis are deliberately absent — the
+        // calibration screen writes them directly, and including them here would let a stale
+        // local clobber a fresh calibration on the next SAVE.
+    }
+
+    if (showPicker) {
+        HrmPickerDialog(
+            onPick = { addr -> hrmAddress = addr; showPicker = false },
+            onDismiss = { showPicker = false },
         )
     }
 
@@ -143,6 +187,7 @@ fun SettingsScreen(
             }
             Stepper(
                 value = targetRpm,
+                label = "TARGET RPM",
                 onDec = { targetRpm = Cadence.clampRpm(targetRpm - 5) },
                 onInc = { targetRpm = Cadence.clampRpm(targetRpm + 5) },
             )
@@ -187,6 +232,95 @@ fun SettingsScreen(
                     BleConnectionState.DISCONNECTED -> "Reconnecting…"
                 }
                 Text(label, color = Muted, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 12.sp))
+            }
+        }
+
+        Section("HEART RATE", hint = "· BLE chest strap") {
+            val hrmState by HrmStatus.state.collectAsState()
+            val year = remember { Calendar.getInstance().get(Calendar.YEAR) }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Strap over BLE",
+                    color = TextPrimary,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 14.sp),
+                )
+                SegmentCell(
+                    text = if (hrmEnabled) "On" else "Off",
+                    selected = hrmEnabled,
+                ) { hrmEnabled = !hrmEnabled }
+            }
+
+            if (hrmEnabled) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        hrmStatusLabel(hrmState),
+                        color = Muted,
+                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = 12.sp),
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (hrmState == BleConnectionState.NO_PERMISSION) {
+                        SegmentCell(text = "GRANT", selected = false) { onRequestBlePermissions() }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        hrmAddress ?: "Any strap",
+                        color = TextPrimary,
+                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = 14.sp),
+                        modifier = Modifier.weight(1f),
+                    )
+                    SegmentCell(text = "CHOOSE", selected = false) { showPicker = true }
+                }
+
+                val estimated = if (birthYearSet) MaxHeartRate.estimateFromAge(birthYear, year) else null
+
+                Stepper(
+                    value = birthYear,
+                    label = if (birthYearSet) "BIRTH YEAR" else "BIRTH YEAR · NOT SET",
+                    onDec = { birthYear -= 1; birthYearSet = true },
+                    onInc = { birthYear += 1; birthYearSet = true },
+                )
+
+                Stepper(
+                    value = maxHr ?: estimated ?: 180,
+                    label = if (maxHr == null) "MAX HR · ESTIMATED" else "MAX HR",
+                    onDec = { maxHr = (maxHr ?: estimated ?: 180) - 1 },
+                    onInc = { maxHr = (maxHr ?: estimated ?: 180) + 1 },
+                )
+
+                HairLine(color = BorderCyanDim)
+
+                Text(
+                    current.baselineHeartRateBpm?.let { bpm ->
+                        val on = current.baselineCalibratedAtMillis
+                            ?.let { SETTINGS_DATE_FMT.format(Date(it)) }
+                            ?: "unknown date"
+                        "Baseline $bpm bpm · calibrated $on"
+                    } ?: "Baseline not calibrated",
+                    color = Muted,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 12.sp),
+                )
+
+                TerminalButton(
+                    text = "CALIBRATE BASELINE",
+                    onClick = { onSave(buildSettings()); onOpenCalibration() },
+                    fontSize = 13.sp,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
 
@@ -257,18 +391,7 @@ fun SettingsScreen(
         TerminalButton(
             text = "SAVE",
             onClick = {
-                val order = screenItems.filter { it.second }.map { it.first }
-                onSave(
-                    current.copy(
-                        units = units,
-                        cadenceMode = cadenceMode,
-                        targetRpm = targetRpm,
-                        theme = theme,
-                        screenOrder = order.ifEmpty { RideScreen.entries.toList() },
-                        stravaUploadEnabled = stravaUploadEnabled,
-                        dashEnabled = dashEnabled,
-                    )
-                )
+                onSave(buildSettings())
                 onDone()
             },
             style = TerminalButtonStyle.PRIMARY,
@@ -365,7 +488,7 @@ private fun ColorSwatch(label: String, color: Color, selected: Boolean, onClick:
 }
 
 @Composable
-private fun Stepper(value: Int, onDec: () -> Unit, onInc: () -> Unit) {
+private fun Stepper(value: Int, label: String, onDec: () -> Unit, onInc: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -384,7 +507,7 @@ private fun Stepper(value: Int, onDec: () -> Unit, onInc: () -> Unit) {
                     .glow(Cyan, blurRadius = 6f),
             )
             Text(
-                "TARGET RPM",
+                label,
                 color = Muted,
                 style = MaterialTheme.typography.labelLarge.copy(fontSize = 11.sp, letterSpacing = 1.5.sp),
                 modifier = Modifier.padding(top = 3.dp),
@@ -479,3 +602,8 @@ private fun themeName(choice: ThemeChoice): String = when (choice) {
     ThemeChoice.ELECTRIC_CYAN -> "Electric Cyan"
     ThemeChoice.HOT_MAGENTA -> "Hot Magenta"
 }
+
+/** Seed for the birth-year stepper when the rider has never set one. */
+private const val DEFAULT_BIRTH_YEAR = 1990
+
+private val SETTINGS_DATE_FMT = SimpleDateFormat("d MMM yyyy", Locale.US)

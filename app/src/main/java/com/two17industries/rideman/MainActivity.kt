@@ -23,19 +23,26 @@ import com.two17industries.rideman.data.RideOrientation
 import com.two17industries.rideman.ui.RideViewModel
 import com.two17industries.rideman.ui.RidemanNav
 import com.two17industries.rideman.ui.theme.RidemanTheme
+import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
 
     private var rideViewModel: RideViewModel? = null
 
-    private val permissions = registerForActivityResult(
+    private val _permissionsGranted = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+
+    private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { }
+    ) { result ->
+        // Previously empty: a denial was silently swallowed, and the BLE clients degraded
+        // with no explanation. Record it so Settings can say what is missing.
+        _permissionsGranted.value = result
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        permissions.launch(
+        permissionLauncher.launch(
             arrayOf(
                 Manifest.permission.ACCESS_FINE_LOCATION,
                 Manifest.permission.POST_NOTIFICATIONS,
@@ -81,6 +88,11 @@ class MainActivity : ComponentActivity() {
                         } else {
                             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                         }
+                    },
+                    onRequestBlePermissions = {
+                        permissionLauncher.launch(
+                            arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
+                        )
                     },
                 )
             }

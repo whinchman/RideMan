@@ -1,6 +1,7 @@
 package com.two17industries.rideman.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -42,14 +43,17 @@ data class RidemanSettings(
     val stravaUploadEnabled: Boolean = true,
     val dashEnabled: Boolean = false,
     val rideOrientation: RideOrientation = RideOrientation.PORTRAIT,
+    /** Whether the app should scan for and connect to a heart rate strap. */
     val hrmEnabled: Boolean = false,
     /** MAC of the remembered strap, or null to connect to the first one found. */
     val hrmAddress: String? = null,
+    /** Rider's birth year, used for the age-estimate fallback. Null when not configured. */
     val birthYear: Int? = null,
     /** Explicit or auto-raised max HR. Null means fall back to the age estimate. */
     val maxHeartRateBpm: Int? = null,
     /** Result of the last calibration. Null means zones use percent-of-max. */
     val baselineHeartRateBpm: Int? = null,
+    /** Epoch millis of the last calibration. Null when no calibration has been run. */
     val baselineCalibratedAtMillis: Long? = null,
 )
 
@@ -121,8 +125,14 @@ class SettingsStore(private val context: Context) {
             p[Keys.GRID_MIGRATED] = true
             p[Keys.RIDE_ORIENTATION] = s.rideOrientation.name
             p[Keys.HRM_ENABLED] = s.hrmEnabled
-            // These are the app's first nullable settings, and save() writes every key
-            // unconditionally — so clearing one needs remove(), not assignment.
+            applyNullableFields(p, s)
+        }
+    }
+
+    companion object {
+        // These are the app's first nullable settings, and save() writes every key
+        // unconditionally — so clearing one needs remove(), not assignment.
+        internal fun applyNullableFields(p: MutablePreferences, s: RidemanSettings) {
             s.hrmAddress?.let { p[Keys.HRM_ADDRESS] = it } ?: p.remove(Keys.HRM_ADDRESS)
             s.birthYear?.let { p[Keys.BIRTH_YEAR] = it } ?: p.remove(Keys.BIRTH_YEAR)
             s.maxHeartRateBpm?.let { p[Keys.MAX_HR] = it } ?: p.remove(Keys.MAX_HR)

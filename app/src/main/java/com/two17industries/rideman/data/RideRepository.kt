@@ -29,16 +29,16 @@ class RideRepository(private val dao: RideDao) {
             maxHeartRateBpm = maxHr,
         )
         val points = track.map { tp ->
-            val it = tp.sample
+            val sample = tp.sample
             TrackPointEntity(
                 rideId = 0,
-                timestamp = it.epochMillis,
-                lat = it.lat,
-                lng = it.lng,
-                altitudeM = it.gpsAltitudeM,
-                speedMps = it.speedMps ?: 0f,
-                headingDeg = it.headingDeg,
-                accuracyM = it.accuracyM,
+                timestamp = sample.epochMillis,
+                lat = sample.lat,
+                lng = sample.lng,
+                altitudeM = sample.gpsAltitudeM,
+                speedMps = sample.speedMps ?: 0f,
+                headingDeg = sample.headingDeg,
+                accuracyM = sample.accuracyM,
                 heartRateBpm = tp.heartRateBpm,
             )
         }
